@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKYSHIELD — Counter-UAS Base Defense</title>
+<style>
+  :root{
+    --bg:#060d08; --panel:#0a1410; --panel2:#0d1a14; --line:#1d3a2a;
+    --green:#39ff8e; --dim:#1f7a4d; --amber:#ffb347; --red:#ff5252;
+    --cyan:#4dd8ff; --violet:#c77dff; --text:#b8e6c9;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; background:var(--bg); color:var(--text);
+    font-family:"Lucida Console","Courier New",monospace; overflow:hidden;}
+  #wrap{display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;}
+  #gamebox{position:relative;}
+  canvas{display:block; background:#04130b; border:1px solid var(--line);
+    box-shadow:0 0 40px rgba(57,255,142,.08); image-rendering:auto;}
+  /* ---------- overlay screens ---------- */
+  .screen{position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; background:rgba(4,12,8,.92);
+    z-index:10; text-align:center; padding:20px;}
+  .screen.hidden{display:none;}
+  h1{color:var(--green); letter-spacing:.35em; font-size:34px; text-shadow:0 0 18px rgba(57,255,142,.5); margin-bottom:6px;}
+  h2{color:var(--green); letter-spacing:.2em; font-size:22px; margin-bottom:12px;}
+  .sub{color:var(--dim); letter-spacing:.15em; font-size:12px; margin-bottom:26px;}
+  .btn{background:transparent; color:var(--green); border:1px solid var(--green);
+    padding:10px 28px; font-family:inherit; font-size:14px; letter-spacing:.15em;
+    cursor:pointer; margin:6px; text-transform:uppercase;}
+  .btn:hover{background:rgba(57,255,142,.12); box-shadow:0 0 12px rgba(57,255,142,.4);}
+  .btn:disabled{opacity:.3; cursor:default; box-shadow:none;}
+  .btn.amber{color:var(--amber); border-color:var(--amber);}
+  .btn.amber:hover{background:rgba(255,179,71,.12); box-shadow:0 0 12px rgba(255,179,71,.4);}
+  table.lb{border-collapse:collapse; margin:10px auto 18px; min-width:340px;}
+  table.lb td,table.lb th{border:1px solid var(--line); padding:6px 16px; font-size:13px;}
+  table.lb th{color:var(--green); letter-spacing:.1em;}
+  input[type=text]{background:var(--panel); border:1px solid var(--green); color:var(--green);
+    font-family:inherit; font-size:16px; padding:8px 12px; letter-spacing:.1em; text-align:center; width:240px;}
+  .briefing{max-width:560px; font-size:13px; line-height:1.7; color:var(--text); margin-bottom:16px; text-align:left;}
+  .briefing b{color:var(--amber);}
+  .helpcols{display:flex; gap:18px; max-width:860px; text-align:left; font-size:11.5px; line-height:1.55; margin-bottom:14px;}
+  .helpcols .col{flex:1; border:1px solid var(--line); padding:10px 12px; background:var(--panel);}
+  .helpcols h3{font-size:12px; letter-spacing:.12em; margin-bottom:6px;}
+  .small{font-size:11px; color:var(--dim); margin-top:10px;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="gamebox">
+    <canvas id="cv" width="1100" height="700"></canvas>
+
+    <div id="menuScreen" class="screen">
+      <h1>SKYSHIELD</h1>
+      <div class="sub">COUNTER-UAS &amp; INTEGRATED AIR DEFENSE // TACTICAL SIMULATION</div>
+      <button class="btn" id="btnStart">Start Campaign</button>
+      <button class="btn" id="btnHelp">Systems Manual</button>
+      <button class="btn" id="btnLB">Leaderboard</button>
+      <div class="small" id="menuHint"></div>
+    </div>
+
+    <div id="helpScreen" class="screen hidden">
+      <h2>SYSTEMS MANUAL</h2>
+      <div class="helpcols">
+        <div class="col">
+          <h3 style="color:var(--red)">SAM BATTERY [1]</h3>
+          Surface-to-air interceptor battery. Long range, kinetic kill — destroys <b>any</b> target in one hit, including cruise missiles.<br><br>
+          <b style="color:var(--amber)">$400 emplace · $75 PER INTERCEPTOR</b><br>
+          Set <b>SAM ROE</b> (top right) to control which targets are worth an interceptor.
+        </div>
+        <div class="col">
+          <h3 style="color:var(--cyan)">EW JAMMER [2]</h3>
+          Electronic attack against C2 &amp; GPS links. Jams <b>every susceptible target in range at once</b> — but only threats with a known waveform. Targets marked <b style="color:var(--amber)">◇</b> (autonomous / fiber-optic) sail right through.<br><br>
+          <b style="color:var(--amber)">$150 emplace · free to operate</b>
+        </div>
+        <div class="col">
+          <h3 style="color:var(--green)">HEL — HIGH ENERGY LASER [3]</h3>
+          Directed energy. Burns through <b>any</b> target type at near-zero cost per shot — but engages <b>one target at a time</b> and needs dwell time to burn through. Tougher airframes take longer.<br><br>
+          <b style="color:var(--amber)">$600 emplace · free per shot</b>
+        </div>
+        <div class="col">
+          <h3 style="color:var(--violet)">HPM — HIGH POWER MICROWAVE [4]</h3>
+          Wide-area RF pulse that fries electronics of <b>everything in the beam</b> — the swarm killer. Works on any target without needing a waveform library, but hardened airframes shrug off most of each pulse.<br><br>
+          <b style="color:var(--amber)">$550 emplace · free per pulse</b>
+        </div>
+      </div>
+      <div class="helpcols">
+        <div class="col">
+          <h3 style="color:var(--amber)">THREATS</h3>
+          <span style="color:#9fd9b8">▲ Quadcopter</span> — slow, fragile, jammable. ·
+          <span style="color:#9fd9b8">▲ FPV</span> — fast attack quad, jammable. ·
+          <span style="color:#9fd9b8">✈ Recon Wing</span> — tougher fixed-wing, jammable. ·
+          <span style="color:var(--amber)">▲ Autonomous</span> — no RF link: <b>EW-immune ◇</b>. ·
+          <span style="color:var(--amber)">▲ Fiber-Optic FPV</span> — cable-guided, trails a visible tether: <b>EW-immune ◇</b>. ·
+          <span style="color:var(--amber)">⁘ Swarm</span> — dozens of micro-drones; overwhelms single-target systems. ·
+          <span style="color:var(--red)">◆ Loitering Munition</span> — hardened, EW-immune, HPM-resistant. ·
+          <span style="color:var(--red)">➤ Cruise Missile</span> — very fast, heavily hardened. SAM or sustained laser only.<br>
+          <b style="color:var(--amber)">Any target wearing the amber ◇ marker cannot be jammed.</b>
+        </div>
+        <div class="col">
+          <h3>OPERATIONS</h3>
+          One continuous campaign: <b>emplacements and funds carry over</b> between levels, and each level adds a budget supplement and new threats.<br>
+          Click a system card (or keys 1-4), then click the map to emplace. Right-click / ESC cancels. Click an emplaced system to <b>UPGRADE</b> (more range + power, 2 tiers) or <b>SELL</b> (60% of invested).<br>
+          <b>SAM ROE</b> (top right) sets which target classes your batteries spend interceptors on — don't let a $75 missile chase a $6 swarm drone.<br>
+          Survive every wave to advance. Base integrity carries to the final score — protect it.
+        </div>
+      </div>
+      <button class="btn" id="btnHelpBack">Back</button>
+    </div>
+
+    <div id="lbScreen" class="screen hidden">
+      <h2>TOP OPERATORS</h2>
+      <div id="lbStatus" class="small"></div>
+      <table class="lb" id="lbTable"></table>
+      <button class="btn" id="btnLBBack">Back</button>
+    </div>
+
+    <div id="briefScreen" class="screen hidden">
+      <h2 id="briefTitle"></h2>
+      <div class="briefing" id="briefText"></div>
+      <button class="btn" id="btnDeploy">Deploy</button>
+    </div>
+
+    <div id="overScreen" class="screen hidden">
+      <h2 id="overTitle"></h2>
+      <div class="sub" id="overSub"></div>
+      <div style="font-size:26px; color:var(--amber); margin-bottom:18px;">FINAL SCORE: <span id="finalScore">0</span></div>
+      <div id="nameEntry">
+        <div class="small" style="margin-bottom:8px">ENTER CALLSIGN FOR THE RECORD</div>
+        <input type="text" id="nameInput" maxlength="14" placeholder="CALLSIGN">
+        <br>
+        <button class="btn" id="btnSubmitScore">Submit Score</button>
+      </div>
+      <div id="postSubmit" class="hidden" style="display:none">
+        <table class="lb" id="lbTable2"></table>
+      </div>
+      <button class="btn amber" id="btnAgain">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   SKYSHIELD — Counter-UAS Base Defense
+   ===================================================================== */
+
+/* ---------- LEADERBOARD CONFIG ----------
+   To enable the shared global leaderboard, create a free Supabase project
+   (see README.md) and paste your values here. Leave blank for
+   local-browser-only high scores. */
+const SUPABASE_URL = "";        // e.g. "https://abcdefgh.supabase.co"
+const SUPABASE_ANON_KEY = "";   // your anon/public key
+
+/* ---------- CANVAS ---------- */
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const W = cv.width, H = cv.height;
+const HUD_H = 64;            // top HUD bar
+const TOOL_H = 96;           // bottom toolbar
+const FIELD = {x:0, y:HUD_H, w:W, h:H-HUD_H-TOOL_H};
+
+/* ---------- TOWER DEFINITIONS ----------
+   lv[]: stats per upgrade level (1-3). upCost[]: cost of lvl2, lvl3. */
+const TOWERS = {
+  sam: {
+    name:"SAM BATTERY", key:"1", color:"#ff5252", cost:400, shotCost:75, dmg:500,
+    lv:[{range:300, reload:2.2},{range:345, reload:1.6},{range:390, reload:1.1}],
+    upCost:[250,350],
+    desc:"$75/interceptor. Kills anything. ROE sets targets.",
+    blurb:"Kinetic interceptor. One shot, one kill — on anything. Upgrades: range + reload."
+  },
+  ew: {
+    name:"EW JAMMER", key:"2", color:"#4dd8ff", cost:150, shotCost:0,
+    lv:[{range:170, jam:1.4},{range:200, jam:1.0},{range:230, jam:0.7}],
+    upCost:[100,150],
+    desc:"Free to operate. Known-link targets only.",
+    blurb:"Area jamming downs every susceptible target in range at once. Useless vs autonomous/fiber. Upgrades: range + jam speed."
+  },
+  hel: {
+    name:"HEL LASER", key:"3", color:"#39ff8e", cost:600, shotCost:0,
+    lv:[{range:250, dps:55},{range:290, dps:85},{range:330, dps:120}],
+    upCost:[350,500],
+    desc:"Free per shot. Any target, one at a time.",
+    blurb:"Directed energy. Burns through any airframe given dwell time. Single target. Upgrades: range + burn rate."
+  },
+  hpm: {
+    name:"HPM EMITTER", key:"4", color:"#c77dff", cost:550, shotCost:0,
+    lv:[{range:150, dmg:34, every:2.4},{range:175, dmg:48, every:2.1},{range:200, dmg:65, every:1.8}],
+    upCost:[300,450],
+    desc:"Free pulses. Hits EVERYTHING in range.",
+    blurb:"Wide-area microwave pulse fries whole swarms at once; hardened targets resist. Upgrades: range + pulse power."
+  }
+};
+const towerStat = t => TOWERS[t.kind].lv[t.lvl-1];
+
+/* ---------- ENEMY DEFINITIONS ----------
+   ew: susceptible to jamming (known waveform)
+   hpmRes: fraction of HPM damage RESISTED (0 = fully soft)            */
+const ENEMIES = {
+  quad:   {name:"Quadcopter",      hp:25,  spd:38,  dmg:5,  reward:15,  r:7,  ew:true,  hpmRes:0,    color:"#9fd9b8", shape:"quad"},
+  fpv:    {name:"FPV Attack",      hp:18,  spd:85,  dmg:8,  reward:20,  r:6,  ew:true,  hpmRes:0,    color:"#d9d49f", shape:"quad"},
+  wing:   {name:"Recon Wing",      hp:70,  spd:48,  dmg:10, reward:30,  r:10, ew:true,  hpmRes:.15,  color:"#9fc6d9", shape:"wing"},
+  auto:   {name:"Autonomous UAS",  hp:30,  spd:46,  dmg:7,  reward:25,  r:7,  ew:false, hpmRes:0,    color:"#ffb347", shape:"quad"},
+  fiber:  {name:"Fiber-Optic FPV", hp:22,  spd:75,  dmg:9,  reward:25,  r:6,  ew:false, hpmRes:0,    color:"#ff8c42", shape:"quad", fiber:true},
+  swarm:  {name:"Swarm Element",   hp:9,   spd:62,  dmg:3,  reward:6,   r:4,  ew:true,  hpmRes:0,    color:"#baffba", shape:"dot"},
+  aswarm: {name:"Auto-Swarm",      hp:9,   spd:66,  dmg:3,  reward:7,   r:4,  ew:false, hpmRes:0,    color:"#ffd9a0", shape:"dot"},
+  loiter: {name:"Loitering Munition",hp:140,spd:42, dmg:20, reward:60,  r:11, ew:false, hpmRes:.55,  color:"#ff8888", shape:"delta"},
+  cruise: {name:"Cruise Missile",  hp:230, spd:120, dmg:35, reward:100, r:9,  ew:false, hpmRes:.8,   color:"#ff5252", shape:"missile"}
+};
+
+/* ---------- LEVELS ----------
+   One persistent battlefield: base at center, towers & funds carry over.
+   grant: budget supplement at level start. unlock: systems that become available.
+   wave entry: [type, count, secondsBetweenSpawns, initialDelay, pathIndex(-1=random 360)] */
+const NW_PATH = [[0,120],[260,180],[440,280],[550,334]];
+const E_PATH  = [[1100,150],[840,210],[660,290],[550,334]];
+const S_PATH  = [[260,604],[380,480],[480,400],[550,334]];
+
+const LEVELS = [
+  { name:"LEVEL 1 — OPENING SALVO", mode:"lanes", grant:900, unlock:["sam"],
+    brief:"Cruise missiles and recon aircraft inbound on a known ingress corridor. This is the fight we built for: your <b>SAM battery</b> one-shots anything in the sky. At $75 an interceptor against million-dollar threats, the economics favor us. Emplace on the corridor and hold the line.",
+    paths:[NW_PATH],
+    waves:[
+      [["cruise",3,7,0,0]],
+      [["cruise",4,5,0,0],["wing",2,6,3,0]],
+      [["cruise",5,4,0,0],["wing",3,5,2,0]]
+    ]},
+  { name:"LEVEL 2 — COST ASYMMETRY", mode:"lanes", grant:500, unlock:["ew"],
+    brief:"The threat just changed. Hundreds of <b>$1,000 hobby quadcopters</b> on two corridors — and every interceptor you fire costs more than the target it kills. Fire missiles at this raid and they will <b>bankrupt you</b>. New tool authorized: the <b>EW Jammer</b> — their C2 links are catalogued, so jamming drops every drone in range for free. Tip: open <b>SAM ROE</b> and uncheck small targets so your battery saves interceptors for what matters.",
+    paths:[NW_PATH, E_PATH],
+    waves:[
+      [["quad",12,1.2,0,0],["quad",6,1.5,2,1]],
+      [["quad",14,1.0,0,1],["fpv",6,1.2,3,0]],
+      [["quad",16,0.9,0,0],["fpv",8,1.0,2,1]],
+      [["quad",14,0.9,0,1],["fpv",10,0.9,0,0],["wing",2,6,5,0]]
+    ]},
+  { name:"LEVEL 3 — CUT THE CORD", mode:"lanes", grant:800, unlock:["hel"],
+    brief:"The enemy adapted. <b>Fiber-optic FPVs</b> trail a physical cable — no RF link to jam. <b>Autonomous airframes</b> navigate with no link at all. Both show an <b>amber ◇ marker</b>: your jammers cannot touch them, and a third corridor just opened. New tool authorized: the <b>HEL laser</b> — high upfront cost, but it burns through <b>any</b> airframe for pennies a shot. One target at a time; give it dwell time.",
+    paths:[NW_PATH, E_PATH, S_PATH],
+    waves:[
+      [["quad",8,1.1,0,0],["fiber",5,1.6,2,2]],
+      [["fiber",8,1.2,0,1],["auto",6,1.4,2,2]],
+      [["auto",8,1.1,0,0],["fiber",8,1.1,1,1],["fpv",6,1.0,4,2]],
+      [["fiber",10,1.0,0,2],["auto",8,1.0,2,0],["wing",3,4,5,1]]
+    ]},
+  { name:"LEVEL 4 — SATURATION", mode:"360", grant:800, unlock:["hpm"],
+    brief:"Corridor discipline is gone — micro-drone <b>swarms</b> now attack from <b>any axis</b>, dozens at a time. Your laser kills one target at a time; a 30-drone swarm will walk right past it. New tool authorized: <b>HPM</b> — one microwave pulse fries every drone in the beam, free, no waveform library needed. Watch for amber autonomous swarm variants your jammers can't touch.",
+    paths:[],
+    waves:[
+      [["swarm",18,0.4,0,-1],["quad",6,1.2,3,-1]],
+      [["swarm",24,0.35,0,-1],["fiber",6,1.2,4,-1]],
+      [["aswarm",18,0.4,0,-1],["swarm",16,0.4,5,-1]],
+      [["swarm",26,0.3,0,-1],["aswarm",16,0.45,3,-1],["wing",3,4,8,-1]],
+      [["aswarm",30,0.28,0,-1],["auto",8,1.2,4,-1]]
+    ]},
+  { name:"LEVEL 5 — HARDENED THREATS", mode:"360", grant:900, unlock:[],
+    brief:"Hardened <b>loitering munitions</b> from all axes — EW-immune, and shielded electronics shrug off most of an HPM pulse. This is where the layers matter: HPM sweeps the swarm screen, HEL burns the heavies, SAMs catch leakers. Check your ROE — every interceptor wasted on a swarm element is one you won't have for a loitering munition.",
+    paths:[],
+    waves:[
+      [["loiter",4,3.5,0,-1],["swarm",14,0.4,2,-1]],
+      [["loiter",6,2.8,0,-1],["aswarm",16,0.4,3,-1]],
+      [["loiter",8,2.2,0,-1],["fiber",8,1.0,2,-1]],
+      [["loiter",8,2.0,0,-1],["swarm",20,0.3,2,-1],["wing",4,3,6,-1]],
+      [["loiter",12,1.6,0,-1],["aswarm",20,0.3,4,-1]]
+    ]},
+  { name:"LEVEL 6 — FULL SPECTRUM", mode:"360", grant:1200, unlock:[],
+    brief:"Combined-arms strike package: swarms to soak your defenses, loitering munitions behind them, <b>cruise missiles</b> on the deck at high speed. Missiles for the missiles, lasers for the heavies, microwaves for the swarm — the full architecture, or the base falls. Good luck, Commander.",
+    paths:[],
+    waves:[
+      [["swarm",18,0.35,0,-1],["loiter",5,2.8,3,-1]],
+      [["cruise",2,6,2,-1],["aswarm",18,0.35,0,-1]],
+      [["loiter",8,2.0,0,-1],["cruise",3,5,4,-1],["swarm",16,0.35,2,-1]],
+      [["cruise",4,4,0,-1],["aswarm",24,0.3,2,-1],["fiber",10,0.9,5,-1]],
+      [["loiter",10,1.8,0,-1],["cruise",4,4,6,-1],["swarm",20,0.3,3,-1]],
+      [["cruise",6,3,0,-1],["loiter",10,1.6,2,-1],["aswarm",26,0.28,4,-1]]
+    ]}
+];
+
+const BASE = {x:550, y:334, r:34};      // fixed: one persistent battlefield
+const SELL_RATIO = 0.6;
+/* ===== SECTION:STATE ===== */
+let game = null;          // active run state
+let phase = "menu";       // menu | build | wave | over
+let mouse = {x:0,y:0,inField:false};
+let placing = null;       // tower key being placed
+let selected = null;      // selected tower object
+let roeOpen = false;      // SAM rules-of-engagement panel
+let speedMult = 1;
+let shake = 0;
+
+function newGame(){
+  return {
+    level:0, wave:0, cash:0, baseHP:100, score:0,
+    enemies:[], towers:[], missiles:[], fx:[],
+    spawnQueue:[], waveActive:false, time:0,
+    kills:0, won:false,
+    samROE:{quad:true, fpv:true, wing:true, auto:true, fiber:true,
+            swarm:false, aswarm:false, loiter:true, cruise:true}
+  };
+}
+
+/* towers and funds PERSIST across levels — only enemies/projectiles reset */
+function startLevel(li){
+  const L = LEVELS[li];
+  game.level = li; game.wave = 0; game.cash += L.grant;
+  game.enemies = []; game.missiles = []; game.fx = [];
+  game.spawnQueue = []; game.waveActive = false;
+  placing = null; selected = null;
+}
+
+function unlockedKinds(){
+  const s = new Set();
+  for (let i=0;i<=game.level;i++) for (const k of (LEVELS[i].unlock||[])) s.add(k);
+  return s;
+}
+function unlockLevelOf(kind){
+  for (let i=0;i<LEVELS.length;i++) if ((LEVELS[i].unlock||[]).includes(kind)) return i+1;
+  return 1;
+}
+
+function startWave(){
+  const L = LEVELS[game.level];
+  const wv = L.waves[game.wave];
+  game.spawnQueue = [];
+  for (const [type,count,gap,delay,pi] of wv){
+    for (let i=0;i<count;i++){
+      game.spawnQueue.push({t: delay + i*gap, type, pi});
+    }
+  }
+  game.spawnQueue.sort((a,b)=>a.t-b.t);
+  game.time = 0;
+  game.waveActive = true;
+  phase = "wave";
+}
+
+/* ---------- helpers ---------- */
+const dist = (a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+function pathLength(pts){
+  let l=0; for(let i=1;i<pts.length;i++) l+=Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+  return l;
+}
+function pointOnPath(pts, d){
+  for (let i=1;i<pts.length;i++){
+    const seg = Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+    if (d <= seg){
+      const t = d/seg;
+      return {x: pts[i-1][0]+(pts[i][0]-pts[i-1][0])*t,
+              y: pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t,
+              ang: Math.atan2(pts[i][1]-pts[i-1][1], pts[i][0]-pts[i-1][0])};
+    }
+    d -= seg;
+  }
+  const n=pts.length-1;
+  return {x:pts[n][0], y:pts[n][1], ang:0};
+}
+function distToPath(p, pts){
+  let best = 1e9;
+  for (let i=1;i<pts.length;i++){
+    const ax=pts[i-1][0],ay=pts[i-1][1],bx=pts[i][0],by=pts[i][1];
+    const dx=bx-ax, dy=by-ay, len2=dx*dx+dy*dy;
+    let t = len2? ((p.x-ax)*dx+(p.y-ay)*dy)/len2 : 0;
+    t = clamp(t,0,1);
+    best = Math.min(best, Math.hypot(p.x-(ax+dx*t), p.y-(ay+dy*t)));
+  }
+  return best;
+}
+
+/* ---------- spawning ---------- */
+function spawnEnemy(type, pi){
+  const def = ENEMIES[type];
+  const L = LEVELS[game.level];
+  const e = {
+    type, hp:def.hp, maxhp:def.hp, spd:def.spd, r:def.r,
+    jam:0, jammed:false, dead:false, burn:0,
+    x:0, y:0, ang:0
+  };
+  if (L.mode==="lanes" && pi>=0){
+    e.path = L.paths[pi]; e.pd = 0; e.plen = pathLength(e.path);
+    const p = pointOnPath(e.path,0); e.x=p.x; e.y=p.y;
+    // small lateral offset so stacked spawns don't overlap perfectly
+    e.off = (Math.random()*16-8);
+  } else {
+    const a = Math.random()*Math.PI*2;
+    const rad = Math.max(FIELD.w,FIELD.h)*0.62;
+    e.x = BASE.x + Math.cos(a)*rad;
+    e.y = BASE.y + Math.sin(a)*rad;
+    e.weave = Math.random()*Math.PI*2;
+    e.weaveAmp = (e.type==="swarm"||e.type==="aswarm") ? 26 : 10;
+  }
+  e.sx = e.x; e.sy = e.y;          // spawn point (fiber tether anchor)
+  game.enemies.push(e);
+}
+
+/* ---------- enemy update ---------- */
+function updateEnemy(e, dt){
+  if (e.jammed){
+    // jammed targets spiral down and crash
+    e.crash -= dt;
+    e.y += 60*dt; e.x += Math.sin(e.crash*12)*40*dt;
+    if (e.crash<=0){ killEnemy(e, true); }
+    return;
+  }
+  const spd = e.spd;
+  if (e.path){
+    e.pd += spd*dt;
+    if (e.pd >= e.plen){ hitBase(e); return; }
+    const p = pointOnPath(e.path, e.pd);
+    const nx = Math.cos(p.ang+Math.PI/2), ny = Math.sin(p.ang+Math.PI/2);
+    e.x = p.x + nx*(e.off||0); e.y = p.y + ny*(e.off||0); e.ang = p.ang;
+  } else {
+    const dx = BASE.x-e.x, dy = BASE.y-e.y, d = Math.hypot(dx,dy);
+    if (d < BASE.r+e.r){ hitBase(e); return; }
+    e.weave += dt*3;
+    const wx = -dy/d, wy = dx/d;
+    const wob = Math.sin(e.weave)*(e.weaveAmp||0)*0.04;
+    e.x += (dx/d + wx*wob)*spd*dt;
+    e.y += (dy/d + wy*wob)*spd*dt;
+    e.ang = Math.atan2(dy,dx);
+  }
+}
+
+function hitBase(e){
+  const def = ENEMIES[e.type];
+  game.baseHP -= def.dmg;
+  shake = Math.min(14, shake + def.dmg*0.5);
+  fx("blast", BASE.x, BASE.y, 30, "#ff5252");
+  e.dead = true;
+  if (game.baseHP <= 0){ game.baseHP = 0; endRun(false); }
+}
+
+function killEnemy(e, byJam){
+  if (e.dead) return;
+  e.dead = true;
+  const def = ENEMIES[e.type];
+  game.cash += def.reward;
+  game.score += def.reward*10;
+  game.kills++;
+  fx(byJam?"crash":"blast", e.x, e.y, e.r*2.2, def.color);
+}
+
+function damage(e, amt){
+  if (e.dead) return;
+  e.hp -= amt;
+  if (e.hp <= 0) killEnemy(e, false);
+}
+
+/* ---------- tower updates ---------- */
+function towerTargets(t){
+  return game.enemies.filter(e=>!e.dead && !e.jammed && dist(t,e)<=t.range);
+}
+function pickTarget(t, list){
+  // prefer target closest to the base / end of path
+  let best=null, bd=1e9;
+  for (const e of list){
+    const d = e.path ? (e.plen-e.pd) : dist(e,BASE);
+    if (d<bd){ bd=d; best=e; }
+  }
+  return best;
+}
+
+function updateTower(t, dt){
+  const def = TOWERS[t.kind];
+  const st = towerStat(t);
+  t.cool = Math.max(0, t.cool-dt);
+  t.anim = (t.anim||0)+dt;
+
+  if (t.kind==="sam"){
+    if (t.cool>0 || game.cash < def.shotCost) return;
+    // honor Rules of Engagement: only engage toggled-on target classes
+    const tgt = pickTarget(t, towerTargets(t).filter(e=>game.samROE[e.type]));
+    if (tgt){
+      game.cash -= def.shotCost;
+      t.cool = st.reload;
+      game.missiles.push({x:t.x, y:t.y-14, tgt, spd:340, ang:-Math.PI/2});
+      fx("flash", t.x, t.y-14, 10, "#ffdd99");
+    }
+  }
+  else if (t.kind==="ew"){
+    // jam ALL susceptible targets in range simultaneously
+    t.active = false;
+    for (const e of game.enemies){
+      if (e.dead||e.jammed) continue;
+      if (!ENEMIES[e.type].ew) continue;
+      if (dist(t,e)>t.range) continue;
+      t.active = true;
+      e.jam += dt * (TOWERS.ew.lv[0].jam / st.jam);   // upgraded jammers jam faster
+      if (e.jam >= TOWERS.ew.lv[0].jam){ e.jammed = true; e.crash = 0.9; }
+    }
+  }
+  else if (t.kind==="hel"){
+    // keep current target if still valid, else acquire
+    if (t.tgt && (t.tgt.dead || t.tgt.jammed || dist(t,t.tgt)>t.range)) t.tgt=null;
+    if (!t.tgt) t.tgt = pickTarget(t, towerTargets(t));
+    if (t.tgt){
+      damage(t.tgt, st.dps*dt);
+      t.tgt.burn = 0.15;
+      if (t.tgt.dead) t.tgt=null;
+    }
+  }
+  else if (t.kind==="hpm"){
+    if (t.cool>0) return;
+    const list = towerTargets(t);
+    if (list.length){
+      t.cool = st.every;
+      t.pulse = 0.45;
+      for (const e of list){
+        const res = ENEMIES[e.type].hpmRes||0;
+        damage(e, st.dmg*(1-res));
+      }
+    }
+  }
+}
+
+/* ---------- missiles ---------- */
+function updateMissile(m, dt){
+  if (m.tgt.dead || m.tgt.jammed){
+    // retarget nearest live enemy, else fizzle
+    let best=null, bd=1e9;
+    for (const e of game.enemies){ if(!e.dead&&!e.jammed){const d=dist(m,e); if(d<bd){bd=d;best=e;}} }
+    if (!best){ m.dead=true; fx("flash",m.x,m.y,8,"#ffdd99"); return; }
+    m.tgt = best;
+  }
+  const dx=m.tgt.x-m.x, dy=m.tgt.y-m.y, d=Math.hypot(dx,dy);
+  const want = Math.atan2(dy,dx);
+  let da = want - m.ang;
+  while (da>Math.PI) da-=Math.PI*2;
+  while (da<-Math.PI) da+=Math.PI*2;
+  m.ang += clamp(da, -4.2*dt, 4.2*dt);
+  m.spd = Math.min(520, m.spd + 420*dt);
+  m.x += Math.cos(m.ang)*m.spd*dt;
+  m.y += Math.sin(m.ang)*m.spd*dt;
+  if (Math.random()<0.6) fx("trail", m.x, m.y, 2.5, "#ffcf8a");
+  if (d < m.tgt.r+8){
+    damage(m.tgt, TOWERS.sam.dmg);
+    fx("blast", m.x, m.y, 22, "#ffb347");
+    m.dead = true;
+  }
+}
+
+/* ---------- particles / fx ---------- */
+function fx(kind,x,y,r,color){
+  game.fx.push({kind,x,y,r,color,life: kind==="trail"?0.35: kind==="flash"?0.18:0.5, max: kind==="trail"?0.35: kind==="flash"?0.18:0.5});
+}
+function updateFx(dt){
+  for (const f of game.fx) f.life -= dt;
+  game.fx = game.fx.filter(f=>f.life>0);
+}
+
+/* ---------- wave / level flow ---------- */
+function updateWave(dt){
+  game.time += dt;
+  while (game.spawnQueue.length && game.spawnQueue[0].t <= game.time){
+    const s = game.spawnQueue.shift();
+    spawnEnemy(s.type, s.pi);
+  }
+  for (const e of game.enemies) if(!e.dead) updateEnemy(e, dt);
+  for (const t of game.towers) updateTower(t, dt);
+  for (const m of game.missiles) updateMissile(m, dt);
+  game.missiles = game.missiles.filter(m=>!m.dead);
+  game.enemies = game.enemies.filter(e=>!e.dead);
+  for (const e of game.enemies) e.burn = Math.max(0,(e.burn||0)-dt);
+  updateFx(dt);
+
+  if (phase==="wave" && !game.spawnQueue.length && !game.enemies.length){
+    // wave cleared
+    game.waveActive = false;
+    game.score += 250;
+    game.wave++;
+    const L = LEVELS[game.level];
+    if (game.wave >= L.waves.length){
+      game.score += 1000 + game.baseHP*10;
+      if (game.level >= LEVELS.length-1){ endRun(true); return; }
+      startLevel(game.level+1);
+      showBriefing();
+    } else {
+      game.cash += 100; // wave completion stipend
+      phase = "build";
+    }
+  }
+}
+
+function endRun(won){
+  game.won = won;
+  phase = "over";
+  document.getElementById("overTitle").textContent = won ? "BASE SECURED" : "BASE DESTROYED";
+  document.getElementById("overTitle").style.color = won ? "var(--green)" : "var(--red)";
+  document.getElementById("overSub").textContent = won
+    ? "All threat waves neutralized across every sector. Outstanding, Commander."
+    : "Base integrity lost at " + LEVELS[game.level].name + ", wave " + (game.wave+1) + ".";
+  document.getElementById("finalScore").textContent = game.score.toLocaleString();
+  document.getElementById("nameEntry").style.display = "block";
+  document.getElementById("postSubmit").style.display = "none";
+  document.getElementById("nameInput").value = localStorage.getItem("ss_callsign")||"";
+  show("overScreen");
+}
+/* ===== SECTION:RENDER ===== */
+let uiButtons = [];   // clickable rects rebuilt each frame
+let sweepAng = 0;
+
+function render(dt){
+  uiButtons = [];
+  ctx.save();
+  ctx.clearRect(0,0,W,H);
+  if (shake>0){ ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake); shake=Math.max(0,shake-30*dt); }
+
+  drawField(dt);
+  if (game){
+    drawPaths();
+    drawTowers();
+    drawEnemies();
+    drawMissiles();
+    drawFx();
+    drawBase();
+    drawGhost();
+  }
+  ctx.restore();
+  drawHUD();
+  drawToolbar();
+  drawROE();
+  if (selected) drawInspect();
+}
+
+function drawField(dt){
+  // grid
+  ctx.fillStyle = "#04130b";
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = "rgba(57,255,142,0.05)";
+  ctx.lineWidth = 1;
+  for (let x=0;x<W;x+=50){ ctx.beginPath(); ctx.moveTo(x,FIELD.y); ctx.lineTo(x,FIELD.y+FIELD.h); ctx.stroke(); }
+  for (let y=FIELD.y;y<FIELD.y+FIELD.h;y+=50){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  // radar rings around base
+  if (game){
+    ctx.strokeStyle = "rgba(57,255,142,0.10)";
+    for (let r=90;r<=450;r+=90){
+      ctx.beginPath(); ctx.arc(BASE.x,BASE.y,r,0,Math.PI*2); ctx.stroke();
+    }
+    // sweep
+    sweepAng += dt*0.8;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0,FIELD.y,W,FIELD.h); ctx.clip();
+    ctx.beginPath();
+    ctx.moveTo(BASE.x,BASE.y);
+    ctx.arc(BASE.x,BASE.y,460,sweepAng-0.5,sweepAng);
+    ctx.closePath();
+    const grad = ctx.createRadialGradient(BASE.x,BASE.y,0,BASE.x,BASE.y,460);
+    grad.addColorStop(0,"rgba(57,255,142,0.10)");
+    grad.addColorStop(1,"rgba(57,255,142,0.0)");
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawPaths(){
+  const L = LEVELS[game.level];
+  if (L.mode!=="lanes") return;
+  ctx.save();
+  ctx.setLineDash([10,8]);
+  ctx.strokeStyle = "rgba(255,82,82,0.35)";
+  ctx.lineWidth = 2;
+  for (const p of L.paths){
+    ctx.beginPath();
+    ctx.moveTo(p[0][0],p[0][1]);
+    for (let i=1;i<p.length;i++) ctx.lineTo(p[i][0],p[i][1]);
+    ctx.stroke();
+    // ingress arrow at start
+    ctx.save();
+    const a = Math.atan2(p[1][1]-p[0][1], p[1][0]-p[0][0]);
+    ctx.translate(p[0][0],p[0][1]); ctx.rotate(a);
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(255,82,82,0.6)";
+    ctx.beginPath(); ctx.moveTo(26,0); ctx.lineTo(10,-7); ctx.lineTo(10,7); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawBase(){
+  ctx.save();
+  ctx.translate(BASE.x,BASE.y);
+  ctx.strokeStyle = "#39ff8e"; ctx.lineWidth=2;
+  ctx.fillStyle = "rgba(57,255,142,0.08)";
+  ctx.beginPath();
+  for (let i=0;i<6;i++){
+    const a = Math.PI/6 + i*Math.PI/3;
+    const px = Math.cos(a)*BASE.r, py = Math.sin(a)*BASE.r;
+    i?ctx.lineTo(px,py):ctx.moveTo(px,py);
+  }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle="#39ff8e"; ctx.font="bold 10px monospace"; ctx.textAlign="center";
+  ctx.fillText("BASE",0,-4);
+  // HP bar
+  const w=56, pct=game.baseHP/100;
+  ctx.fillStyle="#142a1c"; ctx.fillRect(-w/2,10,w,6);
+  ctx.fillStyle = pct>0.5?"#39ff8e":pct>0.25?"#ffb347":"#ff5252";
+  ctx.fillRect(-w/2,10,w*pct,6);
+  ctx.restore();
+}
+
+function towerAt(x,y){
+  for (const t of game.towers) if (Math.hypot(t.x-x,t.y-y)<18) return t;
+  return null;
+}
+
+function canPlace(x,y){
+  if (y<FIELD.y+20 || y>FIELD.y+FIELD.h-14 || x<14 || x>W-14) return false;
+  if (Math.hypot(x-BASE.x,y-BASE.y) < BASE.r+30) return false;
+  for (const t of game.towers) if (Math.hypot(t.x-x,t.y-y)<36) return false;
+  const L=LEVELS[game.level];
+  if (L.mode==="lanes") for (const p of L.paths) if (distToPath({x,y},p)<26) return false;
+  return true;
+}
+
+function drawTowerIcon(t, kind, x, y, active){
+  const def = TOWERS[kind];
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.strokeStyle = def.color; ctx.fillStyle = def.color; ctx.lineWidth=1.6;
+  if (kind==="sam"){
+    ctx.strokeRect(-11,-9,22,18);
+    // missile tubes
+    for (let i=-1;i<=1;i++){
+      ctx.save(); ctx.translate(i*6,-2); ctx.rotate(-0.5);
+      ctx.fillRect(-1.5,-8,3,12);
+      ctx.restore();
+    }
+  } else if (kind==="ew"){
+    ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(10,8); ctx.lineTo(-10,8); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(0,2); ctx.stroke();
+    if (active && t){
+      const ph = (t.anim*2)%1;
+      ctx.globalAlpha = 1-ph;
+      ctx.beginPath(); ctx.arc(0,-13, 6+ph*16, -2.4, -0.7); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  } else if (kind==="hel"){
+    ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0,-11); ctx.lineTo(0,-17); ctx.stroke();
+  } else if (kind==="hpm"){
+    ctx.strokeRect(-10,-10,20,20);
+    ctx.beginPath(); ctx.arc(0,0,5,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,8,-1.2,1.2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawTowers(){
+  for (const t of game.towers){
+    const def = TOWERS[t.kind];
+    // range ring when selected or hovered
+    if (selected===t || (Math.hypot(mouse.x-t.x,mouse.y-t.y)<18 && !placing)){
+      ctx.strokeStyle = def.color; ctx.globalAlpha=0.25;
+      ctx.beginPath(); ctx.arc(t.x,t.y,t.range,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+    // pad
+    ctx.fillStyle = "rgba(10,30,20,0.9)";
+    ctx.strokeStyle = "rgba(57,255,142,0.25)";
+    ctx.beginPath(); ctx.arc(t.x,t.y,16,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    drawTowerIcon(t, t.kind, t.x, t.y, t.active);
+    // HEL beam
+    if (t.kind==="hel" && t.tgt && !t.tgt.dead){
+      ctx.save();
+      ctx.strokeStyle = "#7dffb6"; ctx.lineWidth = 2 + Math.random()*1.5;
+      ctx.shadowColor = "#39ff8e"; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(t.x,t.y-4); ctx.lineTo(t.tgt.x,t.tgt.y); ctx.stroke();
+      ctx.restore();
+    }
+    // HPM pulse
+    if (t.pulse>0){
+      const p = 1 - t.pulse/0.45;
+      ctx.strokeStyle = def.color; ctx.globalAlpha = (1-p)*0.8; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(t.x,t.y, p*t.range,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha=1; ctx.lineWidth=1.6;
+      t.pulse -= 1/60;
+    }
+    // EW field shimmer
+    if (t.kind==="ew" && t.active){
+      ctx.strokeStyle = def.color; ctx.globalAlpha=0.12+0.06*Math.sin(t.anim*6);
+      ctx.beginPath(); ctx.arc(t.x,t.y,t.range,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+    // SAM reload bar
+    if (t.kind==="sam" && t.cool>0){
+      const pct = 1 - t.cool/towerStat(t).reload;
+      ctx.fillStyle="#142a1c"; ctx.fillRect(t.x-12,t.y+18,24,3);
+      ctx.fillStyle="#ff5252"; ctx.fillRect(t.x-12,t.y+18,24*pct,3);
+    }
+    // upgrade level pips
+    if (t.lvl>1){
+      ctx.fillStyle = def.color;
+      for (let i=0;i<t.lvl;i++) ctx.fillRect(t.x-8+i*6, t.y-24, 4, 4);
+    }
+  }
+}
+
+function drawEnemies(){
+  // fiber tethers under everything
+  for (const e of game.enemies){
+    if (ENEMIES[e.type].fiber && !e.jammed){
+      ctx.strokeStyle = "rgba(255,140,66,0.30)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(e.sx, e.sy);
+      const mx = (e.sx+e.x)/2, my = (e.sy+e.y)/2 + 14;
+      ctx.quadraticCurveTo(mx, my, e.x, e.y); ctx.stroke();
+    }
+  }
+  for (const e of game.enemies){
+    const def = ENEMIES[e.type];
+    ctx.save();
+    ctx.translate(e.x,e.y);
+    let col = def.color;
+    if (e.jammed){ ctx.globalAlpha=0.7; col="#888"; ctx.rotate(e.crash*10); }
+    else ctx.rotate(e.ang+Math.PI/2);
+    if (e.burn>0){ ctx.shadowColor="#39ff8e"; ctx.shadowBlur=10; }
+    ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=1.5;
+    const r = e.r;
+    if (def.shape==="quad"){
+      // x-frame quad
+      ctx.beginPath(); ctx.moveTo(-r,-r); ctx.lineTo(r,r); ctx.moveTo(r,-r); ctx.lineTo(-r,r); ctx.stroke();
+      for (const [sx,sy] of [[-r,-r],[r,-r],[-r,r],[r,r]]){
+        ctx.beginPath(); ctx.arc(sx,sy,r*0.45,0,Math.PI*2); ctx.stroke();
+      }
+      ctx.fillRect(-1.5,-1.5,3,3);
+    } else if (def.shape==="dot"){
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+    } else if (def.shape==="wing"){
+      ctx.beginPath(); ctx.moveTo(0,-r*1.2); ctx.lineTo(r,r*0.5); ctx.lineTo(0,r*0.1); ctx.lineTo(-r,r*0.5); ctx.closePath(); ctx.stroke();
+    } else if (def.shape==="delta"){
+      ctx.beginPath(); ctx.moveTo(0,-r*1.3); ctx.lineTo(r*0.9,r); ctx.lineTo(-r*0.9,r); ctx.closePath();
+      ctx.fill();
+    } else if (def.shape==="missile"){
+      ctx.beginPath(); ctx.moveTo(0,-r*1.6); ctx.lineTo(r*0.5,r); ctx.lineTo(-r*0.5,r); ctx.closePath(); ctx.fill();
+      // exhaust
+      ctx.fillStyle="rgba(255,179,71,0.8)";
+      ctx.beginPath(); ctx.moveTo(0,r+2+Math.random()*5); ctx.lineTo(r*0.3,r); ctx.lineTo(-r*0.3,r); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    // EW-immune marker: amber diamond (autonomous / fiber-optic — cannot be jammed)
+    if (!def.ew && !e.jammed){
+      ctx.save();
+      ctx.translate(e.x, e.y-e.r-9);
+      ctx.strokeStyle="#ffb347"; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(0,-4); ctx.lineTo(4,0); ctx.lineTo(0,4); ctx.lineTo(-4,0); ctx.closePath(); ctx.stroke();
+      ctx.restore();
+    }
+    // jam progress arc
+    if (e.jam>0 && !e.jammed){
+      ctx.strokeStyle="#4dd8ff"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(e.x,e.y,e.r+5,-Math.PI/2,-Math.PI/2+ (e.jam/TOWERS.ew.lv[0].jam)*Math.PI*2); ctx.stroke();
+    }
+    // hp bar for damaged big targets
+    if (e.hp<e.maxhp && e.maxhp>=50 && !e.jammed){
+      ctx.fillStyle="#142a1c"; ctx.fillRect(e.x-12,e.y-e.r-9,24,3);
+      ctx.fillStyle="#ffb347"; ctx.fillRect(e.x-12,e.y-e.r-9,24*(e.hp/e.maxhp),3);
+    }
+  }
+}
+
+function drawMissiles(){
+  for (const m of game.missiles){
+    ctx.save();
+    ctx.translate(m.x,m.y); ctx.rotate(m.ang+Math.PI/2);
+    ctx.fillStyle="#ffeecc";
+    ctx.beginPath(); ctx.moveTo(0,-7); ctx.lineTo(3,5); ctx.lineTo(-3,5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawFx(){
+  for (const f of game.fx){
+    const p = f.life/f.max;
+    ctx.globalAlpha = p;
+    if (f.kind==="blast"){
+      ctx.strokeStyle = f.color; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(f.x,f.y,f.r*(1.4-p),0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle = f.color; ctx.globalAlpha = p*0.5;
+      ctx.beginPath(); ctx.arc(f.x,f.y,f.r*0.5*p,0,Math.PI*2); ctx.fill();
+    } else if (f.kind==="crash"){
+      ctx.strokeStyle="#888"; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(f.x,f.y,f.r*(1.2-p),0,Math.PI*2); ctx.stroke();
+    } else {
+      ctx.fillStyle=f.color;
+      ctx.beginPath(); ctx.arc(f.x,f.y,f.r*p,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawGhost(){
+  if (!placing || !mouse.inField) return;
+  const def = TOWERS[placing];
+  const ok = canPlace(mouse.x,mouse.y) && game.cash>=def.cost;
+  ctx.globalAlpha=0.5;
+  ctx.strokeStyle = ok?def.color:"#ff5252";
+  ctx.beginPath(); ctx.arc(mouse.x,mouse.y,def.lv[0].range,0,Math.PI*2); ctx.stroke();
+  drawTowerIcon(null, placing, mouse.x, mouse.y, false);
+  if (!ok){
+    ctx.strokeStyle="#ff5252"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(mouse.x-10,mouse.y-10); ctx.lineTo(mouse.x+10,mouse.y+10);
+    ctx.moveTo(mouse.x+10,mouse.y-10); ctx.lineTo(mouse.x-10,mouse.y+10); ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ---------- HUD & toolbar ---------- */
+function btn(x,y,w,h,label,id,color,disabled){
+  uiButtons.push({x,y,w,h,id,disabled});
+  const hov = mouse.x>=x&&mouse.x<=x+w&&mouse.y>=y&&mouse.y<=y+h;
+  ctx.strokeStyle = color; ctx.globalAlpha = disabled?0.3:1;
+  if (hov&&!disabled){ ctx.fillStyle="rgba(57,255,142,0.12)"; ctx.fillRect(x,y,w,h); }
+  ctx.strokeRect(x,y,w,h);
+  ctx.fillStyle=color; ctx.font="12px monospace"; ctx.textAlign="center";
+  ctx.fillText(label, x+w/2, y+h/2+4);
+  ctx.globalAlpha=1;
+}
+
+function drawHUD(){
+  ctx.fillStyle="#081410"; ctx.fillRect(0,0,W,HUD_H);
+  ctx.strokeStyle="var(--line)"; ctx.strokeStyle="#1d3a2a";
+  ctx.beginPath(); ctx.moveTo(0,HUD_H); ctx.lineTo(W,HUD_H); ctx.stroke();
+  if (!game) return;
+  const L = LEVELS[game.level];
+  ctx.textAlign="left"; ctx.font="13px monospace";
+  ctx.fillStyle="#39ff8e";
+  ctx.fillText(L.name, 16, 25);
+  ctx.fillStyle="#1f7a4d"; ctx.font="11px monospace";
+  ctx.fillText("WAVE "+Math.min(game.wave+1,L.waves.length)+" / "+L.waves.length+"   "+(L.mode==="lanes"?"// CORRIDOR INGRESS":"// 360\u00B0 ATTACK AXES"), 16, 44);
+  ctx.font="13px monospace"; ctx.textAlign="left";
+  ctx.fillStyle="#ffb347"; ctx.fillText("FUNDS $"+game.cash, 380, 25);
+  ctx.fillStyle="#b8e6c9"; ctx.fillText("SCORE "+game.score.toLocaleString(), 380, 46);
+  // base integrity
+  ctx.fillStyle="#b8e6c9"; ctx.fillText("BASE INTEGRITY", 580, 25);
+  const pct = game.baseHP/100;
+  ctx.fillStyle="#142a1c"; ctx.fillRect(580,32,160,12);
+  ctx.fillStyle = pct>0.5?"#39ff8e":pct>0.25?"#ffb347":"#ff5252";
+  ctx.fillRect(580,32,160*pct,12);
+  ctx.strokeStyle="#1d3a2a"; ctx.strokeRect(580,32,160,12);
+  ctx.fillStyle="#b8e6c9"; ctx.font="11px monospace";
+  ctx.fillText(game.baseHP+"%", 748, 42);
+  // speed + ROE + wave buttons
+  btn(W-90, 14, 74, 36, "SPEED x"+speedMult, "speed", "#4dd8ff", false);
+  btn(W-188, 14, 88, 36, "SAM ROE", "roe", roeOpen?"#ffb347":"#ff5252", false);
+  if (phase==="build"){
+    const t = (Math.sin(performance.now()/300)+1)/2;
+    ctx.save();
+    ctx.shadowColor="#ffb347"; ctx.shadowBlur=6+t*8;
+    btn(W-388, 14, 184, 36, "▶ LAUNCH WAVE "+(game.wave+1), "wave", "#ffb347", false);
+    ctx.restore();
+  } else {
+    ctx.fillStyle="#1f7a4d"; ctx.font="11px monospace"; ctx.textAlign="right";
+    ctx.fillText("HOSTILES: "+(game.enemies.length+game.spawnQueue.length), W-208, 36);
+  }
+}
+
+function drawToolbar(){
+  const y0 = H-TOOL_H;
+  ctx.fillStyle="#081410"; ctx.fillRect(0,y0,W,TOOL_H);
+  ctx.strokeStyle="#1d3a2a";
+  ctx.beginPath(); ctx.moveTo(0,y0); ctx.lineTo(W,y0); ctx.stroke();
+  if (!game) return;
+  const kinds = Object.keys(TOWERS);
+  const unlocked = unlockedKinds();
+  const cw = 240, ch = TOOL_H-16, gap=14;
+  let x = 16;
+  for (const k of kinds){
+    const def = TOWERS[k];
+    const isOpen = unlocked.has(k);
+    const afford = game.cash>=def.cost;
+    const sel = placing===k;
+    uiButtons.push({x, y:y0+8, w:cw, h:ch, id:"tower:"+k, disabled:!afford||!isOpen});
+    ctx.fillStyle = sel? "rgba(57,255,142,0.10)" : "rgba(10,20,16,0.9)";
+    ctx.fillRect(x,y0+8,cw,ch);
+    ctx.strokeStyle = sel? def.color : "#1d3a2a";
+    ctx.lineWidth = sel?2:1;
+    ctx.strokeRect(x,y0+8,cw,ch);
+    ctx.lineWidth = 1.6;
+    if (!isOpen){
+      ctx.globalAlpha = 0.30;
+      drawTowerIcon(null, k, x+26, y0+8+ch/2, false);
+      ctx.textAlign="left"; ctx.font="bold 12px monospace"; ctx.fillStyle="#666";
+      ctx.fillText("["+def.key+"] "+def.name, x+50, y0+28);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle="#777"; ctx.font="11px monospace";
+      ctx.fillText("🔒 LOCKED — UNLOCKS LEVEL "+unlockLevelOf(k), x+50, y0+50);
+      x += cw+gap; continue;
+    }
+    ctx.globalAlpha = afford?1:0.35;
+    drawTowerIcon(null, k, x+26, y0+8+ch/2, false);
+    ctx.textAlign="left"; ctx.font="bold 12px monospace"; ctx.fillStyle=def.color;
+    ctx.fillText("["+def.key+"] "+def.name, x+50, y0+28);
+    ctx.font="11px monospace"; ctx.fillStyle="#ffb347";
+    ctx.fillText("$"+def.cost, x+50, y0+45);
+    ctx.fillStyle="#b8e6c9";
+    wrapText(def.desc, x+50, y0+61, cw-60, 13);
+    ctx.globalAlpha=1;
+    x += cw+gap;
+  }
+}
+
+function wrapText(text,x,y,maxW,lh){
+  const words = text.split(" ");
+  let line="";
+  for (const w of words){
+    if (ctx.measureText(line+w).width>maxW){ ctx.fillText(line,x,y); y+=lh; line=w+" "; }
+    else line += w+" ";
+  }
+  ctx.fillText(line,x,y);
+}
+
+function drawInspect(){
+  const t = selected, def = TOWERS[t.kind];
+  const bx = clamp(t.x+24, 10, W-250), by = clamp(t.y-80, HUD_H+10, H-TOOL_H-140);
+  ctx.fillStyle="rgba(6,16,10,0.95)"; ctx.fillRect(bx,by,235,124);
+  ctx.strokeStyle=def.color; ctx.strokeRect(bx,by,235,124);
+  ctx.textAlign="left"; ctx.font="bold 12px monospace"; ctx.fillStyle=def.color;
+  ctx.fillText(def.name+"  ·  LVL "+t.lvl+"/3", bx+10, by+20);
+  ctx.font="10px monospace"; ctx.fillStyle="#b8e6c9";
+  wrapText(def.blurb, bx+10, by+36, 215, 12);
+  if (t.lvl < 3){
+    const cost = def.upCost[t.lvl-1];
+    btn(bx+10, by+66, 215, 22, "▲ UPGRADE  $"+cost, "upgrade", "#39ff8e", game.cash<cost);
+  } else {
+    ctx.fillStyle="#1f7a4d"; ctx.font="11px monospace"; ctx.textAlign="center";
+    ctx.fillText("— MAX LEVEL —", bx+117, by+80);
+  }
+  btn(bx+10, by+94, 130, 22, "SELL $"+Math.round(t.invested*SELL_RATIO), "sell", "#ffb347", false);
+  btn(bx+150, by+94, 75, 22, "CLOSE", "close", "#4dd8ff", false);
+}
+
+/* ---------- SAM Rules of Engagement panel ---------- */
+function drawROE(){
+  if (!roeOpen || !game) return;
+  const rows = Object.keys(ENEMIES);
+  const px = W-272, py = HUD_H+12, pw = 258, ph = rows.length*24 + 64;
+  ctx.fillStyle="rgba(6,16,10,0.96)"; ctx.fillRect(px,py,pw,ph);
+  ctx.strokeStyle="#ff5252"; ctx.strokeRect(px,py,pw,ph);
+  ctx.textAlign="left"; ctx.font="bold 12px monospace"; ctx.fillStyle="#ff5252";
+  ctx.fillText("SAM RULES OF ENGAGEMENT", px+12, py+22);
+  ctx.font="10px monospace"; ctx.fillStyle="#1f7a4d";
+  ctx.fillText("checked = batteries WILL expend $75 interceptors", px+12, py+38);
+  let y = py+50;
+  for (const k of rows){
+    const def = ENEMIES[k];
+    const on = game.samROE[k];
+    uiButtons.push({x:px+8, y, w:pw-16, h:22, id:"roe:"+k, disabled:false});
+    if (mouse.x>=px+8&&mouse.x<=px+pw-8&&mouse.y>=y&&mouse.y<=y+22){
+      ctx.fillStyle="rgba(255,82,82,0.08)"; ctx.fillRect(px+8,y,pw-16,22);
+    }
+    ctx.strokeStyle = on?"#39ff8e":"#444";
+    ctx.strokeRect(px+14, y+5, 12, 12);
+    if (on){ ctx.fillStyle="#39ff8e"; ctx.fillRect(px+17, y+8, 6, 6); }
+    ctx.fillStyle = def.color; ctx.font="11px monospace";
+    ctx.fillText(def.name, px+36, y+15);
+    if (!def.ew){
+      ctx.fillStyle="#ffb347";
+      ctx.fillText("◇", px+pw-58, y+15);
+    }
+    ctx.fillStyle="#1f7a4d";
+    ctx.fillText("$"+def.reward, px+pw-40, y+15);
+    y += 24;
+  }
+  ctx.fillStyle="#1f7a4d"; ctx.font="9px monospace";
+  ctx.fillText("◇ = EW-immune (autonomous / fiber-optic)", px+12, y+10);
+}
+/* ===== SECTION:INPUT ===== */
+function canvasPos(ev){
+  const r = cv.getBoundingClientRect();
+  return {x:(ev.clientX-r.left)*(W/r.width), y:(ev.clientY-r.top)*(H/r.height)};
+}
+cv.addEventListener("mousemove", ev=>{
+  const p = canvasPos(ev);
+  mouse.x=p.x; mouse.y=p.y;
+  mouse.inField = p.y>FIELD.y && p.y<FIELD.y+FIELD.h;
+});
+cv.addEventListener("contextmenu", ev=>{ ev.preventDefault(); placing=null; selected=null; });
+cv.addEventListener("click", ev=>{
+  if (phase!=="build" && phase!=="wave") return;
+  const p = canvasPos(ev);
+  // UI buttons (later-drawn = on top, so iterate in reverse)
+  for (let i=uiButtons.length-1;i>=0;i--){
+    const b = uiButtons[i];
+    if (p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h){
+      if (b.disabled) return;
+      handleButton(b.id);
+      return;
+    }
+  }
+  // field interactions
+  if (p.y<=FIELD.y || p.y>=FIELD.y+FIELD.h) return;
+  if (placing){
+    const def = TOWERS[placing];
+    if (game.cash>=def.cost && canPlace(p.x,p.y)){
+      game.towers.push({kind:placing, x:p.x, y:p.y, cool:0, range:def.lv[0].range,
+                        lvl:1, invested:def.cost, tgt:null, pulse:0, anim:0});
+      game.cash -= def.cost;
+      fx("flash", p.x, p.y, 14, def.color);
+      if (game.cash < def.cost) placing=null;
+    }
+    return;
+  }
+  const t = towerAt(p.x,p.y);
+  selected = t || null;
+});
+
+function handleButton(id){
+  if (id==="speed"){ speedMult = speedMult===1?2:speedMult===2?3:1; }
+  else if (id==="wave"){ if (phase==="build") startWave(); }
+  else if (id==="roe"){ roeOpen = !roeOpen; }
+  else if (id.startsWith("roe:")){
+    const k = id.slice(4);
+    game.samROE[k] = !game.samROE[k];
+  }
+  else if (id==="upgrade" && selected){
+    const def = TOWERS[selected.kind];
+    if (selected.lvl<3){
+      const cost = def.upCost[selected.lvl-1];
+      if (game.cash>=cost){
+        game.cash -= cost;
+        selected.lvl++;
+        selected.invested += cost;
+        selected.range = towerStat(selected).range;
+        fx("flash", selected.x, selected.y, 16, def.color);
+      }
+    }
+  }
+  else if (id==="sell" && selected){
+    game.cash += Math.round(selected.invested*SELL_RATIO);
+    game.towers = game.towers.filter(t=>t!==selected);
+    selected=null;
+  }
+  else if (id==="close"){ selected=null; }
+  else if (id.startsWith("tower:")){
+    const k = id.slice(6);
+    if (!unlockedKinds().has(k)) return;
+    placing = (placing===k)? null : k;
+    selected=null;
+  }
+}
+
+window.addEventListener("keydown", ev=>{
+  if (phase!=="build"&&phase!=="wave") return;
+  if (document.activeElement && document.activeElement.tagName==="INPUT") return;
+  const map = {"1":"sam","2":"ew","3":"hel","4":"hpm"};
+  if (map[ev.key] && unlockedKinds().has(map[ev.key])){ placing = placing===map[ev.key]?null:map[ev.key]; selected=null; }
+  else if (ev.key==="Escape"){ placing=null; selected=null; roeOpen=false; }
+  else if (ev.key===" "){ ev.preventDefault(); if (phase==="build") startWave(); }
+});
+
+/* ===== SECTION:SCREENS ===== */
+const screens = ["menuScreen","helpScreen","lbScreen","briefScreen","overScreen"];
+function show(id){
+  for (const s of screens) document.getElementById(s).classList.toggle("hidden", s!==id);
+}
+function hideAll(){ for (const s of screens) document.getElementById(s).classList.add("hidden"); }
+
+function showBriefing(){
+  const L = LEVELS[game.level];
+  document.getElementById("briefTitle").textContent = L.name;
+  let unlockNote = "";
+  if ((L.unlock||[]).length){
+    unlockNote = "<div style='margin-top:12px; padding:8px 10px; border:1px solid var(--green); color:var(--green)'>★ NEW SYSTEM AUTHORIZED: <b>" +
+      L.unlock.map(k=>TOWERS[k].name).join(", ") + "</b></div>";
+  }
+  document.getElementById("briefText").innerHTML =
+    "<div style='color:var(--red); letter-spacing:.1em; margin-bottom:10px'>// THREAT BRIEFING — " +
+    (L.mode==="lanes"?"KNOWN INGRESS CORRIDORS":"360\u00B0 ATTACK AXES") + "</div>" + L.brief +
+    unlockNote +
+    "<div style='margin-top:12px; color:var(--dim)'>BUDGET SUPPLEMENT: <b style='color:var(--amber)'>+$"+L.grant+"</b> (TOTAL $"+game.cash+") · WAVES: "+L.waves.length+
+    (game.level>0?" · EMPLACEMENTS CARRY OVER":"")+"</div>";
+  show("briefScreen");
+  phase = "brief";
+}
+
+document.getElementById("btnStart").onclick = ()=>{
+  game = newGame();
+  startLevel(0);
+  showBriefing();
+};
+document.getElementById("btnDeploy").onclick = ()=>{ hideAll(); phase="build"; };
+document.getElementById("btnHelp").onclick = ()=>show("helpScreen");
+document.getElementById("btnHelpBack").onclick = ()=>show("menuScreen");
+document.getElementById("btnLB").onclick = async ()=>{ show("lbScreen"); renderLB(await lbFetch(), "lbTable"); };
+document.getElementById("btnLBBack").onclick = ()=>show("menuScreen");
+document.getElementById("btnAgain").onclick = ()=>{ game=null; show("menuScreen"); };
+document.getElementById("btnSubmitScore").onclick = async ()=>{
+  const name = (document.getElementById("nameInput").value.trim()||"ANON").toUpperCase().slice(0,14);
+  localStorage.setItem("ss_callsign", name);
+  document.getElementById("btnSubmitScore").disabled = true;
+  await lbSubmit(name, game.score);
+  document.getElementById("nameEntry").style.display="none";
+  const ps = document.getElementById("postSubmit");
+  ps.style.display="block";
+  renderLB(await lbFetch(), "lbTable2");
+};
+
+/* ===== SECTION:LEADERBOARD ===== */
+const lbConfigured = ()=> SUPABASE_URL && SUPABASE_ANON_KEY;
+
+async function lbFetch(){
+  if (lbConfigured()){
+    try{
+      const res = await fetch(SUPABASE_URL+"/rest/v1/scores?select=name,score&order=score.desc&limit=10",
+        {headers:{apikey:SUPABASE_ANON_KEY, Authorization:"Bearer "+SUPABASE_ANON_KEY}});
+      if (res.ok) return await res.json();
+    }catch(e){}
+    document.getElementById("lbStatus").textContent = "// LINK ERROR — SHOWING LOCAL SCORES";
+  }
+  return JSON.parse(localStorage.getItem("ss_scores")||"[]").slice(0,10);
+}
+
+async function lbSubmit(name, score){
+  if (lbConfigured()){
+    try{
+      const res = await fetch(SUPABASE_URL+"/rest/v1/scores",
+        {method:"POST",
+         headers:{apikey:SUPABASE_ANON_KEY, Authorization:"Bearer "+SUPABASE_ANON_KEY,
+                  "Content-Type":"application/json", Prefer:"return=minimal"},
+         body: JSON.stringify({name, score})});
+      if (res.ok) return;
+    }catch(e){}
+  }
+  const list = JSON.parse(localStorage.getItem("ss_scores")||"[]");
+  list.push({name, score});
+  list.sort((a,b)=>b.score-a.score);
+  localStorage.setItem("ss_scores", JSON.stringify(list.slice(0,25)));
+}
+
+function renderLB(rows, tableId){
+  const tb = document.getElementById(tableId);
+  let html = "<tr><th>#</th><th>CALLSIGN</th><th>SCORE</th></tr>";
+  if (!rows.length) html += "<tr><td colspan=3 style='color:var(--dim)'>NO RECORDS YET</td></tr>";
+  rows.forEach((r,i)=>{
+    html += "<tr><td>"+(i+1)+"</td><td>"+escapeHtml(r.name)+"</td><td>"+Number(r.score).toLocaleString()+"</td></tr>";
+  });
+  tb.innerHTML = html;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+document.getElementById("menuHint").textContent = lbConfigured()
+  ? "GLOBAL LEADERBOARD: ONLINE" : "LEADERBOARD: LOCAL BROWSER ONLY (see README to enable global)";
+
+/* ===== SECTION:MAIN LOOP ===== */
+function fitCanvas(){
+  const pad = 16;
+  const s = Math.min((window.innerWidth-pad)/W, (window.innerHeight-pad)/H, 1.25);
+  cv.style.width = (W*s)+"px";
+  cv.style.height = (H*s)+"px";
+}
+window.addEventListener("resize", fitCanvas);
+fitCanvas();
+
+let last = performance.now();
+function loop(now){
+  let dt = Math.min(0.05, (now-last)/1000);
+  last = now;
+  for (let i=0;i<speedMult && phase==="wave";i++) updateWave(dt);
+  render(dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+/* SKYSHIELD v2 — persistent campaign build */
+</script>
+</body>
+</html>
