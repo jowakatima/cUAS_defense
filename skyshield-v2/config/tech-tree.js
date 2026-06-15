@@ -1,8 +1,13 @@
 /**
  * SKYSHIELD v2 — Tech Tree (stub)
+ *
+ * Upgrades that live outside the per-emplacement upgrade system.
+ * These are global unlocks purchased between waves or levels.
+ * Fully implemented in a future sprint — stubbed here for import safety.
  */
 
 export const TECH_TREE = {
+  // Directed Energy branch
   hpmFreqAgile: {
     name: "HPM Frequency Agile",
     cost: 400,
@@ -12,6 +17,7 @@ export const TECH_TREE = {
     apply: (game) => { game.techUnlocks.hpmFreqAgile = true; }
   },
 
+  // Sensor branch
   sensorNetworkLink: {
     name: "Sensor Network Link",
     cost: 300,
@@ -21,6 +27,7 @@ export const TECH_TREE = {
     apply: (game) => { game.techUnlocks.sensorNetworkLink = true; }
   },
 
+  // Infrastructure branch
   generator: {
     name: "Power Generator",
     cost: 200,
@@ -31,6 +38,7 @@ export const TECH_TREE = {
   }
 };
 
+/** Default tech unlock state for a new game */
 export const defaultTechUnlocks = () => ({
   hpmFreqAgile: false,
   sensorNetworkLink: false

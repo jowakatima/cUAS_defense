@@ -1,5 +1,8 @@
 /**
  * SKYSHIELD v2 — Weapon System
+ *
+ * Handles per-tower update logic: targeting, firing, EW jamming, HEL beam, HPM pulse.
+ * Sensor-dependent weapons (SAM) query TQ from the sensor network.
  */
 
 import { dist, clamp } from '../engine/math.js';
@@ -8,6 +11,7 @@ import { ENEMIES } from '../config/threats.js';
 import { getEnemyTQ } from './sensor-system.js';
 import { bus } from '../engine/event-bus.js';
 
+/** Enemies visible to a tower based on TQ threshold and range */
 function towerTargets(tower, enemies, minTQ = 0) {
   return enemies.filter(e => {
     if (e.dead || e.jammed) return false;
@@ -19,6 +23,7 @@ function towerTargets(tower, enemies, minTQ = 0) {
   });
 }
 
+/** Pick the enemy closest to the base/end-of-path (highest threat priority) */
 import { BASE } from '../config/levels.js';
 
 function pickTarget(list) {
@@ -30,6 +35,7 @@ function pickTarget(list) {
   return best;
 }
 
+/** Apply damage to an enemy, trigger kill if HP depleted */
 export function damageEnemy(enemy, amt, game) {
   if (enemy.dead) return;
   enemy.hp -= amt;
@@ -40,6 +46,7 @@ export function killEnemy(enemy, byJam, game) {
   if (enemy.dead) return;
   enemy.dead = true;
   const def = ENEMIES[enemy.type];
+  // No kill bounties — budget is fixed at level start
   game.score += def.reward * 10;
   game.kills++;
   fxAdd(game, byJam ? 'crash' : 'blast', enemy.x, enemy.y, enemy.r * 2.2, def.color);
@@ -88,7 +95,7 @@ export function damageSensor(sensor, attacker, game) {
     fxAdd(game, 'blast', sensor.x, sensor.y, 28, '#ff5252');
     game.shake = Math.min(14, (game.shake || 0) + 8);
     game.sensors = game.sensors.filter(s => s !== sensor);
-    bus.emit('tower:destroyed', { tower: sensor });
+    bus.emit('tower:destroyed', { tower: sensor }); // reuse event for sensors
   }
 }
 
@@ -98,6 +105,9 @@ function fxAdd(game, kind, x, y, r, color) {
     max:  kind === 'trail' ? 0.35 : kind === 'flash' ? 0.18 : 0.5 });
 }
 
+/**
+ * Main per-tower update. Called once per frame per tower.
+ */
 export function updateTower(tower, game, dt) {
   const def = TOWERS[tower.kind];
   const st  = towerStat(tower);
@@ -118,6 +128,8 @@ export function updateTower(tower, game, dt) {
 function updateSAM(tower, st, game, dt) {
   if (tower.cool > 0 || game.cash < TOWERS.sam.shotCost) return;
 
+  // Only engage targets with TQ >= tqThreshold (otherwise reduced range; filter done by towerTargets)
+  // Get all targets with minimum TQ of 0 (we allow low-TQ engagements at reduced Pk)
   const candidates = towerTargets(tower, game.enemies, 0)
     .filter(e => game.samROE[e.type]);
 
@@ -126,9 +138,11 @@ function updateSAM(tower, st, game, dt) {
 
   const tq = getEnemyTQ(tgt);
   const effectiveRange = samEffectiveRange(tower, tq);
-  if (dist(tower, tgt) > effectiveRange) return;
+  if (dist(tower, tgt) > effectiveRange) return;  // out of effective range for this TQ
 
+  // Probabilistic shot: roll against Pk
   const pk = samPk(tower, tq);
+  // We always fire; the missile itself carries the Pk for hit determination
   game.cash -= TOWERS.sam.shotCost;
   tower.cool = st.reload;
 
@@ -136,7 +150,7 @@ function updateSAM(tower, st, game, dt) {
     x: tower.x, y: tower.y - 14,
     tgt, spd: 340,
     ang: -Math.PI / 2,
-    pk
+    pk    // probability of kill — checked on impact
   });
   fxAdd(game, 'flash', tower.x, tower.y - 14, 10, '#ffdd99');
 }
@@ -146,7 +160,7 @@ function updateEW(tower, st, game, dt) {
   for (const e of game.enemies) {
     if (e.dead || e.jammed) continue;
     const thrDef = ENEMIES[e.type];
-    if (!thrDef.ew) continue;
+    if (!thrDef.ew) continue;                    // not jammable
     if (dist(tower, e) > st.range) continue;
     tower.active = true;
     e.jam += dt * (TOWERS.ew.lv[0].jam / st.jam);
@@ -155,11 +169,13 @@ function updateEW(tower, st, game, dt) {
 }
 
 function updateHEL(tower, def, helDef, game, dt) {
-  if (game.power.load > game.power.capacity) return;
+  // Power grid check
+  if (game.power.load > game.power.capacity) return; // brownout — don't fire
 
   if (tower.tgt && (tower.tgt.dead || tower.tgt.jammed || dist(tower, tower.tgt) > towerStat(tower).range))
     tower.tgt = null;
 
+  // HEL has its own integrated EO/IR — can always acquire targets in range regardless of network TQ
   if (!tower.tgt) {
     const st = towerStat(tower);
     const inRange = game.enemies.filter(e =>
@@ -171,6 +187,7 @@ function updateHEL(tower, def, helDef, game, dt) {
   if (tower.tgt) {
     const st = towerStat(tower);
     const dmg = st.dps * dt;
+    // Track power draw
     tower.firingPower = def.powerDraw;
     damageEnemy(tower.tgt, dmg, game);
     tower.tgt.burn = 0.15;
@@ -182,7 +199,8 @@ function updateHEL(tower, def, helDef, game, dt) {
 
 function updateHPM(tower, st, game, dt) {
   if (tower.cool > 0) return;
-  if (game.power.load > game.power.capacity) return;
+  // Power grid check
+  if (game.power.load > game.power.capacity) return; // brownout
 
   const list = game.enemies.filter(e =>
     !e.dead && !e.jammed && dist(tower, e) <= st.range
@@ -192,6 +210,7 @@ function updateHPM(tower, st, game, dt) {
   tower.cool  = st.every;
   tower.pulse = 0.45;
 
+  // HPM Frequency Agile reduces target resistance
   const freqAgile = game.techUnlocks?.hpmFreqAgile || false;
 
   for (const e of list) {
@@ -201,6 +220,10 @@ function updateHPM(tower, st, game, dt) {
   }
 }
 
+/**
+ * Compute total power draw from all weapons this frame.
+ * HEL: only draws while beam is active. HPM: draws per pulse.
+ */
 export function computeWeaponPowerDraw(towers) {
   let load = 0;
   for (const t of towers) {
@@ -210,14 +233,16 @@ export function computeWeaponPowerDraw(towers) {
   return load;
 }
 
+/** Compute EW jamming of sensors (radar jammable by EW-capable threats) */
 export function updateSensorJamming(sensors, enemies) {
   for (const s of sensors) {
     s.jammed = false;
-    if (!s.jammable) continue;
+    if (!s.jammable) continue; // shortcut — non-jammable sensors skip
+    // A sensor is jammed if an EW-capable threat is within effective jam radius (~180px)
     const JAM_RADIUS = 180;
     for (const e of enemies) {
       if (e.dead || e.jammed) continue;
-      if (!ENEMIES[e.type].ew) continue;
+      if (!ENEMIES[e.type].ew) continue;  // threat must have RF emission to jam
       if (dist(s, e) <= JAM_RADIUS) { s.jammed = true; break; }
     }
   }

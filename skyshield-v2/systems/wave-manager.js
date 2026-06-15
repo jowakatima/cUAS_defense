@@ -1,5 +1,8 @@
 /**
  * SKYSHIELD v2 — Wave Manager
+ *
+ * Drives the wave → build phase flow and level transitions.
+ * Emits events for level and wave completion.
  */
 
 import { LEVELS } from '../config/levels.js';
@@ -15,48 +18,64 @@ export function launchWave(game) {
   buildSpawnQueue(game);
 }
 
+/**
+ * Main per-frame update while a wave is active.
+ * Call once per physics tick (may be called multiple times per frame for speed-up).
+ */
 export function updateWave(game, dt) {
   game.time += dt;
 
+  // Spawn from queue
   while (game.spawnQueue.length && game.spawnQueue[0].t <= game.time) {
     const s = game.spawnQueue.shift();
     game.enemies.push(createEnemy(s.type, s.pi, game.level));
   }
 
+  // Update power grid load
   const weaponPower = computeWeaponPowerDraw(game.towers);
-  const sensorPower = updateSensors(game, dt);
+  const sensorPower = updateSensors(game, dt); // also returns sensor draw
   game.power.load = weaponPower + sensorPower;
 
+  // Update sensor jamming state
   updateSensorJamming(game.sensors, game.enemies);
 
+  // Update enemies
   for (const e of game.enemies) {
     if (!e.dead) updateEnemy(e, game, dt);
   }
 
+  // Update weapon towers
   for (const t of game.towers) {
     if (t.hp > 0) updateTower(t, game, dt);
   }
 
+  // Update missiles
   for (const m of game.missiles) {
     if (!m.dead) updateMissile(m, game, dt);
   }
 
+  // Decay HEL pulse (for HPM pulse ring rendering)
   for (const t of game.towers) {
     if (t.pulse > 0) t.pulse -= dt;
   }
 
+  // Decay enemy burn effect
   for (const e of game.enemies) {
     if (e.burn > 0) e.burn = Math.max(0, e.burn - dt);
   }
 
+  // Cleanup dead entities
   game.missiles = game.missiles.filter(m => !m.dead);
   game.enemies  = game.enemies.filter(e => !e.dead);
 
+  // Decay fx
   for (const f of game.fx) f.life -= dt;
   game.fx = game.fx.filter(f => f.life > 0);
 
+  // Decay screen shake
   if (game.shake > 0) game.shake = Math.max(0, game.shake - 30 * dt);
 
+  // Wave clear check
   if (game.waveActive && !game.spawnQueue.length && !game.enemies.length) {
     waveCleared(game);
   }
@@ -72,6 +91,7 @@ function waveCleared(game) {
   game.wave++;
 
   if (game.wave >= L.waves.length) {
+    // Level complete
     game.score += 1000 + game.baseHP * 10;
     bus.emit('level:complete', { level: game.level });
 
@@ -83,6 +103,7 @@ function waveCleared(game) {
       bus.emit('level:start', { level: game.level });
     }
   } else {
+    // Next wave — remain in build phase (no mid-wave budget)
     bus.emit('build:start', { level: game.level, wave: game.wave });
   }
 }

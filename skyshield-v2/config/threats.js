@@ -1,5 +1,13 @@
 /**
  * SKYSHIELD v2 — Threat Definitions
+ *
+ * towerPrio: probability [0-1] that on re-evaluation this threat targets a weapon/sensor
+ *            emplacement instead of the base.
+ * ew: true = jammable by EW jammer (has known RF control link)
+ * hpmRes: fraction of HPM damage resisted [0-1] (0=fully soft, 0.8=very hardened)
+ * fiber: true = trails physical cable; visible to EO/IR and Acoustic only
+ * rfSilent: true = no RF emissions at all (autonomous + fiber); invisible to RF/ESM
+ * noeLow: true = nap-of-earth attacker — evades L-Band and X-Band radar (ground clutter)
  */
 
 export const ENEMIES = {
@@ -39,7 +47,7 @@ export const ENEMIES = {
     name: "Fiber-Optic FPV",
     hp: 22, spd: 75, dmg: 9, reward: 25, r: 6,
     ew: false, hpmRes: 0, rfSilent: true,
-    fiber: true,
+    fiber: true,                    // trails cable; visible to EO/IR and Acoustic ONLY
     color: "#ff8c42", shape: "quad",
     towerPrio: 0.55,
     desc: "Cable-guided. No RF. EW-immune. RF/ESM-blind. EO/IR or Acoustic required."

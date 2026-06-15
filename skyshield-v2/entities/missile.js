@@ -1,11 +1,15 @@
 /**
  * SKYSHIELD v2 — Missile Entity
+ *
+ * SAM interceptor guidance. Retargets if original target is destroyed or jammed.
+ * Pk roll on impact: missile carries the Pk from weapon-system at launch time.
  */
 
 import { dist, clamp, wrapAngle } from '../engine/math.js';
 import { damageEnemy } from '../systems/weapon-system.js';
 
 export function updateMissile(m, game, dt) {
+  // Retarget if primary is gone
   if (m.tgt.dead || m.tgt.jammed) {
     let best = null, bd = 1e9;
     for (const e of game.enemies) {
@@ -20,6 +24,7 @@ export function updateMissile(m, game, dt) {
       return;
     }
     m.tgt = best;
+    // Pk stays at launch value — no second roll
   }
 
   const dx   = m.tgt.x - m.x, dy = m.tgt.y - m.y, d = Math.hypot(dx, dy);
@@ -32,8 +37,9 @@ export function updateMissile(m, game, dt) {
   if (Math.random() < 0.6) fxAdd(game, 'trail', m.x, m.y, 2.5, '#ffcf8a');
 
   if (d < m.tgt.r + 8) {
+    // Pk roll: probabilistic kill
     if (Math.random() < (m.pk ?? 1.0)) {
-      damageEnemy(m.tgt, 500, game);
+      damageEnemy(m.tgt, 500, game); // one-shot damage
     }
     fxAdd(game, 'blast', m.x, m.y, 22, '#ffb347');
     m.dead = true;

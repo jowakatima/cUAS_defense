@@ -1,5 +1,12 @@
 /**
  * SKYSHIELD v2 — Sensor Definitions
+ *
+ * Sensor-weapon pairing rules:
+ *  - Kinetics (SAM, CIWS): Need high TQ for full range/Pk. Below TQ 0.5 → range halved, Pk 60%.
+ *  - EW Jammer: Operates autonomously (area effect). Sensor only required when ROE demands ID.
+ *  - HPM: Fires on anything in range. Sensor only for ROE-ID. Integrated sensor available as upgrade.
+ *  - HEL: Has INTRINSIC integrated EO/IR aiming system. Always TQ=1.0 for its own targets.
+ *         Shares tracks (networkShare) to any weapon within integratedSensor.shareRange.
  */
 
 export const SENSORS = {
@@ -11,14 +18,14 @@ export const SENSORS = {
     hp: 80,
     upCost: [150, 220],
     range: 600,
-    coverageAngle: 360,
-    tqRate: 0.15,
-    jammable: true,
-    poorRCS: ["quad","fpv","fiber","swarm","aswarm"],
-    detectsFiber: false,
+    coverageAngle: 360,       // degrees; 360 = omnidirectional
+    tqRate: 0.15,             // track quality built per second while in range
+    jammable: true,           // can be suppressed by EW-capable threats
+    poorRCS: ["quad","fpv","fiber","swarm","aswarm"],  // low-RCS: reduced tqRate × 0.4
+    detectsFiber: false,      // cannot detect fiber-optic FPVs by RF
     rfOnly: false,
     detectsAll: false,
-    powerDraw: 20,
+    powerDraw: 20,            // kW while active
     desc: "Long-range 360° early warning. Jammable. Poor small-RCS detection.",
     blurb: "Detects all but small-RCS targets at long range. Jammable by EW-capable threats. Needed to feed SAM batteries."
   },
@@ -31,7 +38,7 @@ export const SENSORS = {
     hp: 60,
     upCost: [120, 180],
     range: 350,
-    coverageAngle: 60,
+    coverageAngle: 60,        // narrow sector — must be pointed toward threat axis
     tqRate: 0.55,
     jammable: true,
     poorRCS: ["quad","fpv","swarm","aswarm","fiber"],
@@ -52,9 +59,9 @@ export const SENSORS = {
     upCost: [100, 150],
     range: 200,
     coverageAngle: 360,
-    tqRate: 0.70,
-    jammable: false,
-    poorRCS: [],
+    tqRate: 0.70,             // best TQ rate for small targets
+    jammable: false,          // millimeter-wave — harder to jam
+    poorRCS: [],              // detects swarms well
     detectsFiber: false,
     rfOnly: false,
     detectsAll: false,
@@ -71,13 +78,13 @@ export const SENSORS = {
     hp: 70,
     upCost: [180, 260],
     range: 280,
-    coverageAngle: 90,
+    coverageAngle: 90,        // gimbaled, but limited sector
     tqRate: 0.65,
-    jammable: false,
+    jammable: false,          // passive optical — emits nothing, immune to SEAD
     poorRCS: [],
-    detectsFiber: true,
+    detectsFiber: true,       // sees fiber cable and drone optically — the ONLY reliable fiber detection
     rfOnly: false,
-    detectsAll: false,
+    detectsAll: false,        // degraded in heavy smoke/dust (handled in future weather system)
     powerDraw: 8,
     desc: "Passive optical. SEAD-immune. Identifies fiber-optic FPVs. 90° sector.",
     blurb: "Passive — emits no signal so SEAD drones ignore it. The only sensor that reliably identifies fiber-optic FPVs. Pairs perfectly with HEL."
@@ -92,11 +99,11 @@ export const SENSORS = {
     upCost: [75, 120],
     range: 500,
     coverageAngle: 360,
-    tqRate: 0.30,
+    tqRate: 0.30,             // lower TQ — passive intercept is less precise
     jammable: false,
     poorRCS: [],
-    detectsFiber: false,
-    rfOnly: true,
+    detectsFiber: false,      // fiber-optic has NO RF emissions — invisible to ESM
+    rfOnly: true,             // only detects RF-emitting threats
     detectsAll: false,
     powerDraw: 5,
     desc: "Passive RF intercept. Long range. Invisible to SEAD. RF threats only.",
@@ -115,15 +122,16 @@ export const SENSORS = {
     tqRate: 0.45,
     jammable: false,
     poorRCS: [],
-    detectsFiber: true,
+    detectsFiber: true,       // hears motor noise — detects everything
     rfOnly: false,
-    detectsAll: true,
+    detectsAll: true,         // detects ALL threat types including autonomous and fiber-optic
     powerDraw: 2,
     desc: "Short-range. Detects ALL threats by motor noise. Not jammable.",
     blurb: "Hears motor noise from any drone type — including fiber-optic and autonomous. Very short range but unjammable and passive. Good last-resort inner ring."
   }
 };
 
+/** Which sensor keys unlock at each level (1-indexed) */
 export const SENSOR_UNLOCKS = {
   1: ["kaband","acoustic"],
   2: ["rfesm","lband"],

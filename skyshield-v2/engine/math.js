@@ -43,8 +43,10 @@ export function distToPath(p, pts) {
   return best;
 }
 
+/** Angle from point a to point b */
 export const angleTo = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
 
+/** Wrap angle to [-π, π] */
 export function wrapAngle(a) {
   while (a >  Math.PI) a -= Math.PI * 2;
   while (a < -Math.PI) a += Math.PI * 2;

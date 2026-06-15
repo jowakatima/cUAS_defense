@@ -1,5 +1,8 @@
 /**
  * SKYSHIELD v2 — Authoritative Game State
+ *
+ * One canonical state object. Systems read and write it; they don't own sub-state.
+ * Towers and sensors persist across levels. Enemies/missiles/fx reset each level.
  */
 
 import { LEVELS } from '../config/levels.js';
@@ -15,10 +18,12 @@ export function newGame() {
     kills:  0,
     won:    false,
 
-    towers:  [],
-    sensors: [],
+    // Persistent across levels
+    towers:  [],     // placed weapon emplacements
+    sensors: [],     // placed sensor emplacements
     techUnlocks: defaultTechUnlocks(),
 
+    // Reset each level
     enemies:    [],
     missiles:   [],
     fx:         [],
@@ -26,11 +31,13 @@ export function newGame() {
     waveActive: false,
     time:       0,
 
+    // Power grid
     power: {
-      capacity: 400,
-      load: 0
+      capacity: 400,   // kW available (base value; generators add more)
+      load: 0          // kW currently drawn (computed each frame)
     },
 
+    // ROE per enemy type
     samROE: {
       quad:   true,
       fpv:    true,
@@ -45,6 +52,11 @@ export function newGame() {
   };
 }
 
+/**
+ * Transition to a new level.
+ * Carries over towers, sensors, cash, HP, score, kills, techUnlocks.
+ * Resets everything else.
+ */
 export function startLevel(game, li) {
   const L = LEVELS[li];
   game.level      = li;
@@ -58,6 +70,7 @@ export function startLevel(game, li) {
   game.time       = 0;
 }
 
+/** Build the spawn queue for the current wave */
 export function buildSpawnQueue(game) {
   const L = LEVELS[game.level];
   const wv = L.waves[game.wave];
@@ -73,6 +86,7 @@ export function buildSpawnQueue(game) {
   game.waveActive = true;
 }
 
+/** Which weapon types are unlocked at the current level */
 export function unlockedWeapons(game) {
   const s = new Set();
   for (let i = 0; i <= game.level; i++)
@@ -80,6 +94,7 @@ export function unlockedWeapons(game) {
   return s;
 }
 
+/** Which sensor types are unlocked at the current level */
 export function unlockedSensors(game) {
   const s = new Set();
   for (let i = 0; i <= game.level; i++)
@@ -87,6 +102,7 @@ export function unlockedSensors(game) {
   return s;
 }
 
+/** Level index on which weapon/sensor kind first unlocks */
 export function unlockLevelOf(kind, type = 'weapon') {
   const key = type === 'weapon' ? 'weaponUnlocks' : 'sensorUnlocks';
   for (let i = 0; i < LEVELS.length; i++)

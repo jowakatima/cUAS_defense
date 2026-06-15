@@ -19,12 +19,14 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
 
+    /* ── Canvas ───────────────────────────────────────────────────── */
     #canvasWrap {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
     }
     #cv { display: block; cursor: crosshair; image-rendering: pixelated; }
 
+    /* ── Overlay screens ──────────────────────────────────────────── */
     .screen {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
@@ -46,6 +48,7 @@
     .panel p  { line-height: 1.65; font-size: 13px; margin-bottom: 12px; color: var(--text); }
     .panel .sub { color: var(--dim); font-size: 11px; margin-bottom: 24px; }
 
+    /* ── Buttons ──────────────────────────────────────────────────── */
     .btn {
       display: inline-block;
       background: transparent;
@@ -68,6 +71,7 @@
     .btn.red     { border-color: var(--red); color: var(--red); }
     .btn:disabled { opacity: 0.35; cursor: default; }
 
+    /* ── Menu ─────────────────────────────────────────────────────── */
     #menuTitle { font-size: 36px; letter-spacing: 6px; color: var(--green); }
     #menuSub   { color: var(--amber); font-size: 11px; letter-spacing: 2px; margin: 4px 0 20px; }
     #menuHint  { color: var(--dim); font-size: 10px; margin-top: 24px; }
@@ -78,12 +82,14 @@
       margin: 24px 0;
     }
 
+    /* ── Brief ────────────────────────────────────────────────────── */
     #briefText { font-size: 12px; line-height: 1.7; color: var(--text); }
     .threat-header { color: var(--red); font-size: 11px; letter-spacing: 2px; margin-bottom: 14px; }
     .unlock-note   { color: var(--amber); font-size: 12px; margin: 14px 0 10px; }
     .budget-note   { color: var(--blue); font-size: 12px; margin-top: 18px; padding-top: 14px;
                      border-top: 1px solid var(--border); }
 
+    /* ── Leaderboard ──────────────────────────────────────────────── */
     .lb-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
     .lb-table th { color: var(--dim); font-weight: normal; text-align: left; padding: 4px 8px;
                    border-bottom: 1px solid var(--border); }
@@ -91,6 +97,7 @@
     .lb-table tr:hover td { background: rgba(57,255,142,0.04); }
     .lb-table td:last-child { text-align: right; color: var(--amber); }
 
+    /* ── Game over ────────────────────────────────────────────────── */
     #overTitle   { font-size: 32px; letter-spacing: 4px; margin-bottom: 6px; }
     #overSub     { color: var(--text); font-size: 12px; margin-bottom: 28px; }
     #finalScore  { color: var(--amber); font-size: 22px; }
@@ -102,6 +109,7 @@
     }
     #nameInput::placeholder { color: var(--dim); }
 
+    /* ── Help ─────────────────────────────────────────────────────── */
     .help-grid {
       display: grid; grid-template-columns: 1fr 1fr;
       gap: 24px 40px; margin: 20px 0;
@@ -112,6 +120,7 @@
     .help-section dt { color: var(--green); float: left; width: 100px; }
     .help-section dd { margin-left: 104px; color: var(--text); padding-bottom: 7px; }
 
+    /* ── Scanline CRT effect ──────────────────────────────────────── */
     #scanlines {
       position: fixed; inset: 0; pointer-events: none; z-index: 1;
       background: repeating-linear-gradient(
@@ -126,38 +135,43 @@
 </head>
 <body>
 
+<!-- CRT scanlines overlay -->
 <div id="scanlines"></div>
 
+<!-- ── Canvas ───────────────────────────────────────────────────────── -->
 <div id="canvasWrap">
   <canvas id="cv" width="900" height="640"></canvas>
 </div>
 
+<!-- ── Menu ─────────────────────────────────────────────────────────── -->
 <div id="menuScreen" class="screen">
   <div class="panel" style="min-width:440px;text-align:center">
     <div id="menuTitle">SKYSHIELD</div>
     <div id="menuSub">COUNTER-UAS DEFENSE // CLASSIFIED</div>
     <p style="color:var(--dim);font-size:11px;max-width:340px;margin:0 auto 20px;">
       Defend the base against a growing swarm threat. Pair sensors with weapons intelligently
-      &mdash; or watch your kinetics fire blind.
+      — or watch your kinetics fire blind.
     </p>
     <hr class="menu-divider">
-    <button class="btn" id="btnStart">&blacktriangleright; NEW MISSION</button>
+    <button class="btn" id="btnStart">▶ NEW MISSION</button>
     <button class="btn blue" id="btnHelp">HELP</button>
     <button class="btn amber" id="btnLB">LEADERBOARD</button>
     <div id="menuHint" style="margin-top:20px"></div>
   </div>
 </div>
 
+<!-- ── Briefing ──────────────────────────────────────────────────────── -->
 <div id="briefScreen" class="screen hidden">
   <div class="panel">
-    <h2 id="briefTitle">LEVEL 1 &mdash; FIRST CONTACT</h2>
+    <h2 id="briefTitle">LEVEL 1 — FIRST CONTACT</h2>
     <div id="briefText"></div>
     <div style="margin-top:28px">
-      <button class="btn amber" id="btnDeploy">&blacktriangleright; DEPLOY DEFENSES</button>
+      <button class="btn amber" id="btnDeploy">▶ DEPLOY DEFENSES</button>
     </div>
   </div>
 </div>
 
+<!-- ── Help ──────────────────────────────────────────────────────────── -->
 <div id="helpScreen" class="screen hidden">
   <div class="panel" style="min-width:660px">
     <h2>OPERATIONAL GUIDE</h2>
@@ -165,10 +179,10 @@
       <div class="help-section">
         <h3>KEYBOARD</h3>
         <dl>
-          <dt>1 &ndash; SAM</dt>    <dd>Place Surface-to-Air Missile battery</dd>
-          <dt>2 &ndash; EW</dt>     <dd>Electronic Warfare jammer</dd>
-          <dt>3 &ndash; HEL</dt>    <dd>High-Energy Laser</dd>
-          <dt>4 &ndash; HPM</dt>    <dd>High-Power Microwave</dd>
+          <dt>1 – SAM</dt>    <dd>Place Surface-to-Air Missile battery</dd>
+          <dt>2 – EW</dt>     <dd>Electronic Warfare jammer</dd>
+          <dt>3 – HEL</dt>    <dd>High-Energy Laser</dd>
+          <dt>4 – HPM</dt>    <dd>High-Power Microwave</dd>
           <dt>TAB</dt>        <dd>Switch Weapons / Sensors tab</dd>
           <dt>SPACE</dt>      <dd>Launch next wave</dd>
           <dt>C</dt>          <dd>Toggle sensor coverage overlay</dd>
@@ -179,13 +193,13 @@
       <div class="help-section">
         <h3>SENSOR SYSTEM</h3>
         <dl>
-          <dt>Track Quality</dt><dd>0&ndash;1 float. Rises under sensor coverage, decays when hidden.</dd>
-          <dt>TQ &lt; 0.10</dt><dd>Hidden &mdash; weapons cannot engage</dd>
-          <dt>TQ 0.10&ndash;0.50</dt><dd>Uncertain &mdash; SAM fires at reduced range &amp; Pk</dd>
-          <dt>TQ &ge; 0.50</dt>  <dd>Good track &mdash; full SAM Pk up to 97%</dd>
-          <dt>EW / HPM</dt>   <dd>Autonomous &mdash; no sensor needed (ROE ID optional)</dd>
-          <dt>HEL</dt>        <dd>Has integrated EO/IR &mdash; always TQ 1.0, shares tracks 280px</dd>
-          <dt>Jammed sensor</dt><dd>Shows red &times;. Re-site or use jam-proof EO/IR / acoustic.</dd>
+          <dt>Track Quality</dt><dd>0–1 float. Rises under sensor coverage, decays when hidden.</dd>
+          <dt>TQ &lt; 0.10</dt><dd>Hidden — weapons cannot engage</dd>
+          <dt>TQ 0.10–0.50</dt><dd>Uncertain — SAM fires at reduced range &amp; Pk</dd>
+          <dt>TQ ≥ 0.50</dt>  <dd>Good track — full SAM Pk up to 97%</dd>
+          <dt>EW / HPM</dt>   <dd>Autonomous — no sensor needed (ROE ID optional)</dd>
+          <dt>HEL</dt>        <dd>Has integrated EO/IR — always TQ 1.0, shares tracks 280px</dd>
+          <dt>Jammed sensor</dt><dd>Shows red ✕. Re-site or use jam-proof EO/IR / acoustic.</dd>
         </dl>
       </div>
       <div class="help-section">
@@ -200,7 +214,7 @@
       <div class="help-section">
         <h3>THREATS</h3>
         <dl>
-          <dt>&loz; Icon</dt>   <dd>EW-immune &mdash; cannot be jammed. Kinetics or DE required.</dd>
+          <dt>◇ Icon</dt>   <dd>EW-immune — cannot be jammed. Kinetics or DE required.</dd>
           <dt>Fiber drone</dt><dd>RF-silent. Needs EO/IR + acoustic to detect.</dd>
           <dt>Autonomous</dt><dd>RF-silent, no fiber tether. EO/IR required.</dd>
           <dt>Swarm</dt>    <dd>Large numbers overwhelm kinetics. HPM is the answer.</dd>
@@ -213,20 +227,22 @@
       POWER GRID: Each weapon draws kW when firing. HEL draws 80kW continuously;
       HPM draws 120kW per pulse. Brownout pauses DE weapons. Add generators (tech tree) for capacity.
     </p>
-    <button class="btn blue" id="btnHelpBack" style="margin-top:16px">&larr; BACK</button>
+    <button class="btn blue" id="btnHelpBack" style="margin-top:16px">← BACK</button>
   </div>
 </div>
 
+<!-- ── Leaderboard ───────────────────────────────────────────────────── -->
 <div id="lbScreen" class="screen hidden">
   <div class="panel" style="min-width:420px">
     <h2>LEADERBOARD</h2>
     <table class="lb-table" id="lbTable">
-      <tr><td colspan="3" style="color:var(--dim)">Loading&hellip;</td></tr>
+      <tr><td colspan="3" style="color:var(--dim)">Loading…</td></tr>
     </table>
-    <button class="btn blue" id="btnLBBack" style="margin-top:24px">&larr; BACK</button>
+    <button class="btn blue" id="btnLBBack" style="margin-top:24px">← BACK</button>
   </div>
 </div>
 
+<!-- ── Game Over ─────────────────────────────────────────────────────── -->
 <div id="overScreen" class="screen hidden">
   <div class="panel" style="min-width:440px;text-align:center">
     <div id="overTitle">BASE SECURED</div>
@@ -241,15 +257,16 @@
     </div>
 
     <div id="postSubmit" style="display:none;margin-top:20px">
-      <p style="color:var(--green);font-size:12px;margin-bottom:14px">SCORE SUBMITTED &check;</p>
+      <p style="color:var(--green);font-size:12px;margin-bottom:14px">SCORE SUBMITTED ✓</p>
       <table class="lb-table" id="lbTable2"></table>
     </div>
 
     <hr class="menu-divider">
-    <button class="btn" id="btnAgain">&larr; MAIN MENU</button>
+    <button class="btn" id="btnAgain">← MAIN MENU</button>
   </div>
 </div>
 
+<!-- ── Module entry point ────────────────────────────────────────────── -->
 <script type="module" src="./main.js"></script>
 
 </body>
