@@ -1,6 +1,9 @@
 /**
  * SKYSHIELD v2 — Main Entry Point
  *
+ * Wires canvas, game state, input, and the render/update loop together.
+ * All heavy logic lives in systems/ and entities/; this file is thin bootstrap.
+ *
  * DEPLOYMENT: Works on GitHub Pages out of the box — all imports are relative paths,
  * no build step required. Push to repo; Pages serves it at /skyshield-v2/.
  * Local dev: `python3 -m http.server 8080` (ES modules don't load via file:// directly).
@@ -17,6 +20,7 @@ import { dist, clamp, distToPath } from './engine/math.js';
 import { getEnemyTQ, visibilityTier } from './systems/sensor-system.js';
 import { drawCoverageOverlay, drawSensorIcon } from './ui/coverage-overlay.js';
 
+/* ── Canvas ────────────────────────────────────────────────────── */
 const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 const W = cv.width, H = cv.height;
@@ -24,18 +28,20 @@ const HUD_H  = 64;
 const TOOL_H = 96;
 const FIELD  = { x: 0, y: HUD_H, w: W, h: H - HUD_H - TOOL_H };
 
+/* ── UI state ──────────────────────────────────────────────────── */
 let game     = null;
-let phase    = 'menu';
+let phase    = 'menu';   // menu | brief | build | wave | over
 let mouse    = { x: 0, y: 0, inField: false };
-let placing  = null;
-let selected = null;
+let placing  = null;     // { category: 'weapon'|'sensor', kind: string }
+let selected = null;     // { category, obj } selected emplacement
 let roeOpen  = false;
 let speedMult = 1;
 let sweepAng  = 0;
 let uiButtons = [];
-let toolTab   = 'weapons';
-let showCoverageOverlay = true;
+let toolTab   = 'weapons'; // 'weapons' | 'sensors'
+let showCoverageOverlay = true; // toggle with C key
 
+/* ── Size canvas to window ─────────────────────────────────────── */
 function fitCanvas() {
   const pad = 16;
   const s = Math.min((window.innerWidth - pad) / W, (window.innerHeight - pad) / H, 1.25);
@@ -45,6 +51,7 @@ function fitCanvas() {
 window.addEventListener('resize', fitCanvas);
 fitCanvas();
 
+/* ── Screen helpers ────────────────────────────────────────────── */
 const SCREENS = ['menuScreen','helpScreen','lbScreen','briefScreen','overScreen'];
 function showScreen(id) {
   SCREENS.forEach(s => document.getElementById(s).classList.toggle('hidden', s !== id));
@@ -53,6 +60,7 @@ function hideAll() {
   SCREENS.forEach(s => document.getElementById(s).classList.add('hidden'));
 }
 
+/* ── Game flow ─────────────────────────────────────────────────── */
 function beginGame() {
   game = newGame();
   startLevel(game, 0);
@@ -104,6 +112,7 @@ function endRun(won) {
   showScreen('overScreen');
 }
 
+/* ── Placement helpers ─────────────────────────────────────────── */
 function canPlace(x, y) {
   if (y < FIELD.y + 20 || y > FIELD.y + FIELD.h - 14 || x < 14 || x > W - 14) return false;
   if (Math.hypot(x - BASE.x, y - BASE.y) < BASE.r + 30) return false;
@@ -130,6 +139,7 @@ function placeTower(x, y) {
       lvl: 1, invested: def.cost, tgt: null, pulse: 0, anim: 0,
       hp: def.hp, maxHP: def.hp, active: false, jammed: false
     };
+    // HPM with integrated sensor
     if (kind === 'hpm' && game._hpmIntegrated) {
       t.integratedSensor = { ...TOWERS.hpm.integratedSensorUpgrade.sensor };
     }
@@ -157,6 +167,7 @@ function addFx(game, kind, x, y, r, color) {
     max:  kind === 'trail' ? 0.35 : kind === 'flash' ? 0.18 : 0.5 });
 }
 
+/* ── Input ─────────────────────────────────────────────────────── */
 function canvasPos(ev) {
   const r = cv.getBoundingClientRect();
   return { x: (ev.clientX - r.left) * (W / r.width), y: (ev.clientY - r.top) * (H / r.height) };
@@ -241,12 +252,14 @@ function handleButton(id) {
   }
 }
 
+/* ── Render ─────────────────────────────────────────────────────── */
 let last = performance.now();
 
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
+  // Physics ticks (multiple for speed-up)
   if (phase === 'wave') {
     for (let i = 0; i < speedMult; i++) updateWave(game, dt);
   }
@@ -268,6 +281,7 @@ function render(dt) {
 
   if (game) {
     drawCoverageOverlay(ctx, game, showCoverageOverlay);
+    drawPlacementZones();
     drawPaths();
     drawSensors();
     drawTowers();
@@ -285,6 +299,7 @@ function render(dt) {
   if (selected) drawInspect();
 }
 
+/* ── Field & radar background ──────────────────────────────────── */
 function drawField(dt) {
   ctx.fillStyle = '#04130b';
   ctx.fillRect(0, 0, W, H);
@@ -330,31 +345,36 @@ function drawPaths() {
   ctx.restore();
 }
 
+/* ── Sensor emplacements ────────────────────────────────────────── */
 function drawSensors() {
   for (const s of game.sensors) {
     const def = SENSORS[s.kind];
+    // Range ring when selected
     const isSelected = selected?.obj === s;
     if (isSelected || Math.hypot(mouse.x - s.x, mouse.y - s.y) < 18) {
       ctx.strokeStyle = def.color; ctx.globalAlpha = 0.25;
       ctx.beginPath(); ctx.arc(s.x, s.y, s.range, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1;
     }
+    // Pad (slightly different shape to distinguish from weapons)
     ctx.fillStyle   = 'rgba(10,25,18,0.9)';
     ctx.strokeStyle = s.jammed ? 'rgba(255,82,82,0.6)' : `rgba(${hexToRgb(def.color)},0.35)`;
     ctx.lineWidth = isSelected ? 2 : 1;
     ctx.beginPath();
-    ctx.rect(s.x - 14, s.y - 14, 28, 28);
+    ctx.rect(s.x - 14, s.y - 14, 28, 28); // square pad (vs circular for weapons)
     ctx.fill(); ctx.stroke();
     ctx.lineWidth = 1.6;
 
     drawSensorIcon(ctx, s.kind, s.x, s.y);
 
+    // HP bar
     if (s.hp < s.maxHP) {
       const pct = s.hp / s.maxHP;
       ctx.fillStyle = '#142a1c'; ctx.fillRect(s.x - 14, s.y + 16, 28, 4);
       ctx.fillStyle = pct > 0.5 ? '#39ff8e' : pct > 0.25 ? '#ffb347' : '#ff5252';
       ctx.fillRect(s.x - 14, s.y + 16, 28 * pct, 4);
     }
+    // Jammed indicator
     if (s.jammed) {
       ctx.strokeStyle = '#ff5252'; ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -365,6 +385,7 @@ function drawSensors() {
   }
 }
 
+/* ── Towers (weapons) ───────────────────────────────────────────── */
 function drawTowers() {
   for (const t of game.towers) {
     const def = TOWERS[t.kind];
@@ -379,6 +400,7 @@ function drawTowers() {
     ctx.beginPath(); ctx.arc(t.x, t.y, 16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     drawTowerIcon(t, t.kind, t.x, t.y, t.active);
 
+    // HEL beam
     if (t.kind === 'hel' && t.tgt && !t.tgt.dead) {
       ctx.save();
       ctx.strokeStyle = '#7dffb6'; ctx.lineWidth = 2 + Math.random() * 1.5;
@@ -386,22 +408,26 @@ function drawTowers() {
       ctx.beginPath(); ctx.moveTo(t.x, t.y - 4); ctx.lineTo(t.tgt.x, t.tgt.y); ctx.stroke();
       ctx.restore();
     }
+    // HPM pulse ring
     if (t.pulse > 0) {
       const p = 1 - t.pulse / 0.45;
       ctx.strokeStyle = def.color; ctx.globalAlpha = (1 - p) * 0.8; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(t.x, t.y, p * t.range, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1; ctx.lineWidth = 1.6;
     }
+    // EW shimmer
     if (t.kind === 'ew' && t.active) {
       ctx.strokeStyle = def.color; ctx.globalAlpha = 0.12 + 0.06 * Math.sin((t.anim || 0) * 6);
       ctx.beginPath(); ctx.arc(t.x, t.y, t.range, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1;
     }
+    // SAM reload bar
     if (t.kind === 'sam' && t.cool > 0) {
       const pct = 1 - t.cool / towerStat(t).reload;
       ctx.fillStyle = '#142a1c'; ctx.fillRect(t.x - 12, t.y + 18, 24, 3);
       ctx.fillStyle = '#ff5252'; ctx.fillRect(t.x - 12, t.y + 18, 24 * pct, 3);
     }
+    // HP bar
     if (t.hp < t.maxHP) {
       const hpPct = t.hp / t.maxHP;
       ctx.fillStyle = '#142a1c'; ctx.fillRect(t.x - 14, t.y + 22, 28, 4);
@@ -413,12 +439,14 @@ function drawTowers() {
         ctx.globalAlpha = 1;
       }
     }
+    // HEL sensor share ring (dashed)
     if (t.kind === 'hel') {
       const iSensor = TOWERS.hel.integratedSensor;
       ctx.strokeStyle = 'rgba(255,179,71,0.18)'; ctx.setLineDash([4, 4]);
       ctx.beginPath(); ctx.arc(t.x, t.y, iSensor.shareRange, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
     }
+    // Upgrade level pips
     if (t.lvl > 1) {
       ctx.fillStyle = def.color;
       for (let i = 0; i < t.lvl; i++) ctx.fillRect(t.x - 8 + i * 6, t.y - 24, 4, 4);
@@ -448,6 +476,7 @@ function drawTowerIcon(t, kind, x, y, active) {
     ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.stroke();
     ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.moveTo(0,-11); ctx.lineTo(0,-17); ctx.stroke();
+    // Integrated sensor dot
     ctx.fillStyle='#ffb347'; ctx.beginPath(); ctx.arc(8,-8,2.5,0,Math.PI*2); ctx.fill();
   } else if (kind === 'hpm') {
     ctx.strokeRect(-10,-10,20,20);
@@ -457,7 +486,9 @@ function drawTowerIcon(t, kind, x, y, active) {
   ctx.restore();
 }
 
+/* ── Enemies ────────────────────────────────────────────────────── */
 function drawEnemies() {
+  // Fiber tethers
   for (const e of game.enemies) {
     if (ENEMIES[e.type].fiber && !e.jammed) {
       ctx.strokeStyle = 'rgba(255,140,66,0.30)'; ctx.lineWidth = 1;
@@ -482,6 +513,7 @@ function drawEnemies() {
     const r = e.r;
 
     if (tier === 'uncertain') {
+      // Just a blurred circle track symbol
       ctx.beginPath(); ctx.arc(0, 0, r + 2, 0, Math.PI * 2);
       ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]);
     } else {
@@ -490,6 +522,7 @@ function drawEnemies() {
 
     ctx.restore();
 
+    // EW-immune marker
     if (!def.ew && !e.jammed && tier === 'tracked') {
       ctx.save(); ctx.translate(e.x, e.y - e.r - 9);
       ctx.strokeStyle = '#ffb347'; ctx.lineWidth = 1.4;
@@ -497,6 +530,7 @@ function drawEnemies() {
       ctx.restore();
     }
 
+    // TQ arc
     if (tier !== 'hidden') {
       const tq = getEnemyTQ(e);
       if (tq > 0.1) {
@@ -506,11 +540,13 @@ function drawEnemies() {
       }
     }
 
+    // Jam progress arc
     if (e.jam > 0 && !e.jammed) {
       ctx.strokeStyle = '#4dd8ff'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 5, -Math.PI / 2, -Math.PI / 2 + (e.jam / TOWERS.ew.lv[0].jam) * Math.PI * 2); ctx.stroke();
     }
 
+    // HP bar for big targets
     if (e.hp < e.maxhp && e.maxhp >= 50 && !e.jammed && tier === 'tracked') {
       ctx.fillStyle = '#142a1c'; ctx.fillRect(e.x - 12, e.y - e.r - 9, 24, 3);
       ctx.fillStyle = '#ffb347'; ctx.fillRect(e.x - 12, e.y - e.r - 9, 24 * (e.hp / e.maxhp), 3);
@@ -538,6 +574,7 @@ function drawEnemyShape(shape, r, ctx) {
   }
 }
 
+/* ── Missiles ───────────────────────────────────────────────────── */
 function drawMissiles() {
   for (const m of game.missiles) {
     ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(m.ang + Math.PI / 2);
@@ -547,6 +584,7 @@ function drawMissiles() {
   }
 }
 
+/* ── FX ─────────────────────────────────────────────────────────── */
 function drawFx() {
   for (const f of game.fx) {
     const p = f.life / f.max;
@@ -567,6 +605,7 @@ function drawFx() {
   }
 }
 
+/* ── Base ───────────────────────────────────────────────────────── */
 function drawBase() {
   ctx.save(); ctx.translate(BASE.x, BASE.y);
   ctx.strokeStyle = '#39ff8e'; ctx.lineWidth = 2;
@@ -584,6 +623,49 @@ function drawBase() {
   ctx.fillStyle = '#142a1c'; ctx.fillRect(-w/2, 10, w, 6);
   ctx.fillStyle = pct > 0.5 ? '#39ff8e' : pct > 0.25 ? '#ffb347' : '#ff5252';
   ctx.fillRect(-w/2, 10, w*pct, 6);
+  ctx.restore();
+}
+
+/* ── Placement zones ────────────────────────────────────────────── */
+function drawPlacementZones() {
+  if (!placing || !game) return;
+  const L = LEVELS[game.level];
+
+  ctx.save();
+
+  // Base exclusion zone (BASE.r + 30)
+  ctx.fillStyle = 'rgba(255,82,82,0.10)';
+  ctx.strokeStyle = 'rgba(255,82,82,0.35)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.arc(BASE.x, BASE.y, BASE.r + 30, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Path exclusion zones (26px corridor around each path)
+  if (L.mode === 'lanes') {
+    for (const p of L.paths) {
+      ctx.strokeStyle = 'rgba(255,82,82,0.20)';
+      ctx.lineWidth = 52; // 26px each side
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = 0.18;
+      ctx.beginPath();
+      ctx.moveTo(p[0][0], p[0][1]);
+      for (let i = 1; i < p.length; i++) ctx.lineTo(p[i][0], p[i][1]);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Label
+  ctx.fillStyle = 'rgba(255,82,82,0.7)';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('— RESTRICTED ZONE —', BASE.x, BASE.y + BASE.r + 48);
+
   ctx.restore();
 }
 
@@ -608,6 +690,7 @@ function drawGhost() {
   ctx.globalAlpha = 1;
 }
 
+/* ── HUD ────────────────────────────────────────────────────────── */
 function btn(x, y, w, h, label, id, color, disabled) {
   uiButtons.push({ x, y, w, h, id, disabled });
   const hov = mouse.x >= x && mouse.x <= x+w && mouse.y >= y && mouse.y <= y+h;
@@ -626,27 +709,26 @@ function drawHUD() {
   if (!game) return;
   const L = LEVELS[game.level];
   ctx.textAlign = 'left'; ctx.font = '13px monospace';
-  ctx.fillStyle = '#39ff8e';
-  ctx.fillText(L.name, 16, 25);
-  ctx.fillStyle = '#1f7a4d'; ctx.font = '11px monospace';
-  ctx.fillText(`WAVE ${Math.min(game.wave+1,L.waves.length)}/${L.waves.length}   // ${L.mode==='lanes'?'CORRIDOR INGRESS':'360° ATTACK AXES'}`, 16, 44);
+  ctx.fillStyle = '#ffb347'; ctx.fillText(`FUNDS $${game.cash}`, 16, 25);
+  ctx.fillStyle = '#b8e6c9'; ctx.font = '11px monospace';
+  ctx.fillText(`SCORE ${game.score.toLocaleString()}`, 16, 44);
   ctx.font = '13px monospace';
-  ctx.fillStyle = '#ffb347'; ctx.fillText(`FUNDS $${game.cash}`, 380, 25);
-  ctx.fillStyle = '#b8e6c9'; ctx.fillText(`SCORE ${game.score.toLocaleString()}`, 380, 46);
+  // Power grid
   const load = game.power.load, cap = game.power.capacity;
   const pwr = clamp(load/cap, 0, 1);
-  ctx.fillStyle = '#b8e6c9'; ctx.fillText('POWER', 520, 25);
-  ctx.fillStyle = '#142a1c'; ctx.fillRect(520, 32, 90, 8);
+  ctx.fillStyle = '#b8e6c9'; ctx.fillText('POWER', 200, 25);
+  ctx.fillStyle = '#142a1c'; ctx.fillRect(200, 32, 90, 8);
   ctx.fillStyle = pwr < 0.7 ? '#39ff8e' : pwr < 0.9 ? '#ffb347' : '#ff5252';
-  ctx.fillRect(520, 32, 90*pwr, 8);
+  ctx.fillRect(200, 32, 90*pwr, 8);
   ctx.fillStyle = '#b8e6c9'; ctx.font = '10px monospace';
-  ctx.fillText(`${Math.round(load)}/${cap}kW`, 615, 39);
-  ctx.fillStyle = '#b8e6c9'; ctx.font = '13px monospace'; ctx.fillText('BASE', 650, 25);
+  ctx.fillText(`${Math.round(load)}/${cap}kW`, 295, 39);
+  // Base HP
+  ctx.fillStyle = '#b8e6c9'; ctx.font = '13px monospace'; ctx.fillText('BASE', 340, 25);
   const bpct = game.baseHP/100;
-  ctx.fillStyle = '#142a1c'; ctx.fillRect(650, 32, 120, 8);
+  ctx.fillStyle = '#142a1c'; ctx.fillRect(340, 32, 120, 8);
   ctx.fillStyle = bpct > 0.5 ? '#39ff8e' : bpct > 0.25 ? '#ffb347' : '#ff5252';
-  ctx.fillRect(650, 32, 120*bpct, 8);
-  ctx.fillStyle = '#b8e6c9'; ctx.font = '11px monospace'; ctx.fillText(`${game.baseHP}%`, 775, 40);
+  ctx.fillRect(340, 32, 120*bpct, 8);
+  ctx.fillStyle = '#b8e6c9'; ctx.font = '11px monospace'; ctx.fillText(`${game.baseHP}%`, 465, 40);
 
   btn(W-90, 14, 74, 36, `SPEED x${speedMult}`, 'speed', '#4dd8ff', false);
   btn(W-188, 14, 88, 36, 'SAM ROE', 'roe', roeOpen ? '#ffb347' : '#ff5252', false);
@@ -663,6 +745,7 @@ function drawHUD() {
   }
 }
 
+/* ── Toolbar ────────────────────────────────────────────────────── */
 function drawToolbar() {
   const y0 = H - TOOL_H;
   ctx.fillStyle = '#081410'; ctx.fillRect(0, y0, W, TOOL_H);
@@ -670,6 +753,7 @@ function drawToolbar() {
   ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(W, y0); ctx.stroke();
   if (!game) return;
 
+  // Tab buttons
   btn(16, y0+4, 90, 22, 'WEAPONS', 'tab:weapons', toolTab==='weapons'?'#39ff8e':'#1f7a4d', false);
   btn(110, y0+4, 90, 22, 'SENSORS', 'tab:sensors', toolTab==='sensors'?'#4dd8ff':'#1f7a4d', false);
 
@@ -748,6 +832,7 @@ function drawSensorCards(y0) {
   }
 }
 
+/* ── Inspect panel ──────────────────────────────────────────────── */
 function drawInspect() {
   if (!selected) return;
   const { category, obj } = selected;
@@ -770,6 +855,7 @@ function drawInspect() {
   btn(bx+150, by+94, 75, 22, 'CLOSE', 'close', '#4dd8ff', false);
 }
 
+/* ── ROE panel ──────────────────────────────────────────────────── */
 function drawROE() {
   if (!roeOpen || !game) return;
   const rows = Object.keys(ENEMIES);
@@ -779,7 +865,7 @@ function drawROE() {
   ctx.textAlign='left'; ctx.font='bold 12px monospace'; ctx.fillStyle='#ff5252';
   ctx.fillText('SAM RULES OF ENGAGEMENT', px+12, py+22);
   ctx.font='10px monospace'; ctx.fillStyle='#1f7a4d';
-  ctx.fillText('checked = SAM WILL expend $75 interceptors', px+12, py+38);
+  ctx.fillText('checked = SAM WILL expend $50 interceptors', px+12, py+38);
   let y = py+50;
   for (const k of rows) {
     const def = ENEMIES[k]; const on = game.samROE[k];
@@ -797,6 +883,7 @@ function drawROE() {
   }
 }
 
+/* ── Util ───────────────────────────────────────────────────────── */
 function wrapText(text, x, y, maxW, lh) {
   const words = text.split(' ');
   let line = '';
@@ -814,6 +901,7 @@ function hexToRgb(hex) {
   return `${r},${g},${b}`;
 }
 
+/* ── Screen button wiring ───────────────────────────────────────── */
 document.getElementById('btnStart').onclick     = beginGame;
 document.getElementById('btnDeploy').onclick    = () => { hideAll(); phase = 'build'; };
 document.getElementById('btnHelp').onclick      = () => showScreen('helpScreen');
@@ -831,6 +919,7 @@ document.getElementById('btnSubmitScore').onclick = async () => {
   renderLB(await lbFetch(), 'lbTable2');
 };
 
+/* ── Leaderboard (local fallback) ───────────────────────────────── */
 const SUPABASE_URL      = '';
 const SUPABASE_ANON_KEY = '';
 const lbConfigured = () => SUPABASE_URL && SUPABASE_ANON_KEY;
@@ -880,5 +969,6 @@ document.getElementById('menuHint').textContent = lbConfigured()
   ? 'GLOBAL LEADERBOARD: ONLINE'
   : 'LEADERBOARD: LOCAL BROWSER ONLY';
 
+/* ── Start ──────────────────────────────────────────────────────── */
 showScreen('menuScreen');
 requestAnimationFrame(loop);
