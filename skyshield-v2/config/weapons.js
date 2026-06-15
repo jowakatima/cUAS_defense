@@ -18,17 +18,17 @@ export const TOWERS = {
     key: "1",
     color: "#ff5252",
     cost: 400,
-    shotCost: 75,
+    shotCost: 50,
     dmg: 500,
     hp: 100,
     lv: [
-      { range: 300, reload: 2.2 },
-      { range: 345, reload: 1.6 },
-      { range: 390, reload: 1.1 }
+      { range: 300, reload: 1.6 },
+      { range: 345, reload: 1.2 },
+      { range: 390, reload: 0.8 }
     ],
     upCost: [250, 350],
-    desc: "$75/interceptor. Kills anything. Needs sensor for full Pk.",
-    blurb: "Kinetic interceptor. One-shot any target. Pk and range depend on sensor network track quality — without a sensor you get 50% range and 60% Pk.",
+    desc: "$50/interceptor. Kills anything. Needs sensor for full Pk.",
+    blurb: "$50/interceptor. Kinetic — one-shot any target. Pk and range depend on sensor network track quality — without a sensor you get 50% range and 60% Pk.",
     // Sensor pairing: kinetic — scales with TQ
     sensorDependent: true,
     pkMin: 0.60,           // Pk at TQ 0 (short range only, 50% range)

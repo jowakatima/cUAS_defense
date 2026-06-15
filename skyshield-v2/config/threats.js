@@ -78,7 +78,7 @@ export const ENEMIES = {
   },
   cruise: {
     name: "Cruise Missile",
-    hp: 230, spd: 120, dmg: 35, reward: 100, r: 9,
+    hp: 230, spd: 90, dmg: 35, reward: 100, r: 9,
     ew: false, hpmRes: 0.80, rfSilent: false,
     color: "#ff5252", shape: "missile",
     towerPrio: 0.05,

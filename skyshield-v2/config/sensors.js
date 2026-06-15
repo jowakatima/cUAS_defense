@@ -57,17 +57,17 @@ export const SENSORS = {
     cost: 200,
     hp: 50,
     upCost: [100, 150],
-    range: 200,
+    range: 550,
     coverageAngle: 360,
-    tqRate: 0.70,             // best TQ rate for small targets
+    tqRate: 0.45,             // optimized for fast targets — slower track build on small/slow
     jammable: false,          // millimeter-wave — harder to jam
-    poorRCS: [],              // detects swarms well
+    poorRCS: ["swarm","aswarm","quad","fpv"],  // small slow targets harder to track precisely
     detectsFiber: false,
     rfOnly: false,
     detectsAll: false,
     powerDraw: 10,
-    desc: "Short-range terminal radar. Detects swarms and small RCS. Hard to jam.",
-    blurb: "Best for swarms and small quads at close range. Not jammable. Pairs well with HPM and CIWS."
+    desc: "Wide-area radar. Excellent vs fast targets (cruise, loiter). Slower track on small/slow drones.",
+    blurb: "Millimeter-wave radar with wide coverage across the whole field. Excels at detecting fast-moving threats like cruise missiles. Not jammable, but builds track quality more slowly on small hovering drones — pair with acoustic for inner defense."
   },
 
   eoir: {

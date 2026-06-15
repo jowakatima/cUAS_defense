@@ -21,7 +21,7 @@ export const LEVELS = [
   {
     name: "LEVEL 1 — OPENING SALVO",
     mode: "lanes",
-    grant: 1200,
+    grant: 1800,
     corridorWidth: 60,
     weaponUnlocks: ["sam"],
     sensorUnlocks: ["kaband","acoustic"],
@@ -32,12 +32,15 @@ Your <b>SAM battery</b> is your only effector right now. Budget is fixed — spe
 half range and 60% kill probability. Deploying even one sensor dramatically changes your engagement envelope.
 Acoustic sensors are cheap inner-ring backup.
 <br><br>
+Cruise missiles arrive in <b>spaced pairs</b> — not salvos. Use the gap between engagements to reload
+and re-cue your SAM before the next threat arrives.
+<br><br>
 Some threats will divert to attack your emplacements before going for the base.`,
     paths: [NW_PATH],
     waves: [
-      [["cruise", 3, 0,  0, 0]],
-      [["cruise", 3, 0,  0, 0], ["wing", 2, 5, 4, 0]],
-      [["cruise", 3, 0,  0, 0], ["cruise", 3, 0, 6, 0], ["wing", 3, 4, 3, 0]]
+      [["cruise", 2, 8,  0, 0]],
+      [["cruise", 2, 8,  0, 0], ["wing", 1, 0, 6, 0]],
+      [["cruise", 2, 6,  0, 0], ["cruise", 2, 6, 8, 0], ["wing", 2, 4, 5, 0]]
     ]
   },
 
